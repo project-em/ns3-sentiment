@@ -1,6 +1,6 @@
-import os, logging
+import os, logging, json
 from flask import Flask, request, render_template, jsonify
-from flask_restplus import Api, Resource
+from flask_restplus import Api, Resource, fields
 
 app = Flask(__name__)
 logging.getLogger('flask_ask').setLevel(logging.DEBUG)
@@ -13,13 +13,18 @@ DEBUG = os.getenv('DEBUG', False)
 api = Api(app, version=VERSION_NO, title=APP_NAME)
 public_ns = api.namespace('api/v1', description='Public methods')
 
+article = api.model('Article', {
+    'article': fields.String(description='Article body', required=True)
+})
+
 @public_ns.route('/parse')
-@public_ns.param('text', 'the text to parse')
 class Parse(Resource):
 
-    def post(text):
+    @public_ns.expect(article)
+    def post(self):
+        data = json.loads(request.data)
         # do things and stuff
-        return 'temp'
+        return data['article'].split('.')[0]
 
 if __name__ == '__main__':
     app.run()
