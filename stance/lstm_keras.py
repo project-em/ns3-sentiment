@@ -38,8 +38,11 @@ def load_data():
 		line = metaFile.readline()
 		line = metaFile.readline()
 		line = line.split("Stance=")[1]
-		y = [int(line.split("\n")[0])]
-		Y.append(y)
+		y = int(line.split("\n")[0])
+		if y == 1:
+			Y.append(y)
+		else:
+			Y.append(0)
 
 	split = len(Y) / 4
 
@@ -60,6 +63,7 @@ def load_data():
 
 	Xlines_train = Xlines[:split]
 	Xlines_test = Xlines[split:]
+	print "test lines are: ", Xlines_test
 
 	all_words = dict()
 	word_index = 1
@@ -114,6 +118,8 @@ def main():
 	# Final evaluation of the model
 	print "testing model"
 	scores = model.evaluate(X_test, y_test, verbose=0)
+	predictions = model.predict_classes(X_test)
+	print "predictions are: ", predictions
 	print("Accuracy: %.2f%%" % (scores[1]*100))
 
 if __name__ == '__main__':
