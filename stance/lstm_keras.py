@@ -95,15 +95,24 @@ def load_data():
 	x_train = np.array(x_train_arr)
 	x_test = np.array(x_test_arr)
 
-	return word_index, (x_train, y_train), (x_test, y_test)
+	pos_indices = np.nonzero(y_test==1)
+	x_test_pos = x_test[pos_indices]
+	y_test_pos = y_test[pos_indices]
+
+	neg_indices = np.nonzero(y_test!=1)
+	x_test_neg = x_test[neg_indices]
+	y_test_neg = y_test[neg_indices]
+
+	return word_index, (x_train, y_train), (x_test_pos, y_test_pos), (x_test_neg, y_test_neg)
 
 def main():
 	# load the dataset
-	num_words, (X_train, y_train), (X_test, y_test) = load_data()
+	num_words, (X_train, y_train), (x_test_pos, y_test_pos), (x_test_neg, y_test_neg) = load_data()
 	# truncate and pad input sequences
 	max_opinion_length = 200
 	X_train = sequence.pad_sequences(X_train, maxlen=max_opinion_length)
-	X_test = sequence.pad_sequences(X_test, maxlen=max_opinion_length)
+	x_test_pos = sequence.pad_sequences(x_test_pos, maxlen=max_opinion_length)
+	x_test_neg = sequence.pad_sequences(x_test_neg, maxlen=max_opinion_length)
 	
 	# create the model
 	embedding_vector_length = 32
@@ -113,14 +122,15 @@ def main():
 	model.add(Dense(1, activation='sigmoid'))
 	model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
 	print(model.summary())
-	model.fit(X_train, y_train, nb_epoch=3, batch_size=64)
+	model.fit(X_train, y_train, nb_epoch=2, batch_size=64)
 
 	# Final evaluation of the model
 	print "testing model"
-	scores = model.evaluate(X_test, y_test, verbose=0)
-	predictions = model.predict_classes(X_test)
-	print "predictions are: ", predictions
-	print("Accuracy: %.2f%%" % (scores[1]*100))
+	pos_scores = model.evaluate(x_test_pos, y_test_pos, verbose=0)
+	print("Positive Accuracy: %.2f%%" % (pos_scores[1]*100))
+
+	neg_scores = model.evaluate(x_test_neg, y_test_neg, verbose=0)
+	print("Negative Accuracy: %.2f%%" % (neg_scores[1]*100))
 
 if __name__ == '__main__':
 	main()
