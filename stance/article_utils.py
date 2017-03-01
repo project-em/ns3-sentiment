@@ -13,7 +13,6 @@ def split_sentences(article):
 	return sentences
 
 def read_data_file(datafile):
-	splitlines = [line.split('\t') for line in datafile.read().splitlines()]
-	sentences = [split[1].decode('utf-8', 'ignore')  for split in splitlines]
-	y = [int(split[2]) for split in splitlines]
-	return sentences, y
+	splitlines = datafile.read().splitlines()
+	sentences = [line.decode('utf-8', 'ignore') for line in splitlines]
+	return sentences
