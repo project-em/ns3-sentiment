@@ -41,6 +41,8 @@ if __name__ == "__main__":
 		line = metaFile.readline()
 		line = metaFile.readline()
 		line = metaFile.readline()
+		print line
+		print meta[i]
 		line = line.split("Stance=")[1]
 		y = int(line.split("\n")[0])
 		Y.append(y)
