@@ -52,7 +52,8 @@ def main():
 	y = np.zeros(len(conservative_sentences))
 
 	# Train liberal vs. neutral
-
+	# model.save('my_model.h5')  # creates a HDF5 file 'my_model.h5'
+	# del model  # deletes the existing model
 
 	# Train conservative vs. neutral
 
