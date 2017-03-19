@@ -1,11 +1,14 @@
 from keras.datasets import imdb
 from keras.models import Sequential
-from keras.layers import Dense
+from keras.layers import Activation, Dense
 from keras.layers import LSTM
-from keras.layers.embeddings import Embedding
+from keras.layers.wrappers import TimeDistributed
+from keras.optimizers import RMSprop
 from keras.preprocessing import sequence
+from keras.utils import np_utils
 from article_utils import read_data_file
 import glob
+from collections import Counter
 import numpy as np
 from nltk.tokenize import wordpunct_tokenize as tokenize
 
@@ -38,6 +41,11 @@ def sentence_to_sequences(vocab, words):
 
 	x_words.append(sentence_end)
 	y_words.append(sentence_end)
+
+	# one hot encode the words
+	# this gives the arrays an extra dimension the size of the vocabulary
+	x_words = np_utils.to_categorical(x_words, vocab_size + first_index)
+	y_words = np_utils.to_categorical(y_words, vocab_size + first_index)
 	return (x_words, y_words)
 
 # Load data for training dueling sentence model
@@ -48,7 +56,7 @@ def load_training_data(filename):
 	datafile = open(filename,'r')
 
 	print "loading sentences"
-	lines = dataFile.readlines()
+	lines = datafile.readlines()
 
 	all_words = dict()
 
@@ -59,7 +67,8 @@ def load_training_data(filename):
 	for line in lines:
 		words = tokenize(line)
 		word_lines.append(words)
-		word_counts(word) += 1
+		for word in words:
+			word_counts[word] += 1
 
 	# free up some space
 	del lines
@@ -68,13 +77,13 @@ def load_training_data(filename):
 	# with an integer.
 	# Using integer representations instead of full words when training the 
 	# model will save space.
-	word_indices = [first_index : vocab_size + first_index]
+	word_indices = range(first_index, vocab_size + first_index)
 	vocab = dict(zip(word_counts.most_common(vocab_size), word_indices))
 
 	x_train_arr = []
 	y_train_arr = []
 	for words in word_lines:
-		(x_words, y_words) = sentence_to_sequences(words)
+		(x_words, y_words) = sentence_to_sequences(vocab, words)
 		x_train_arr.append(x_words)
 		y_train_arr.append(y_words)
 
@@ -87,6 +96,7 @@ def score_sentence(model, x_words):
 	# get a numpy array of probability predictions
 	word_probs = model.predict_proba(x_words)
 	# for each word, get the probability of the next word being next
+	print "probability prediction shape: ", word_probs.shape
 
 	# the probability of a sentence is the product of probabilities
 	# of each word given the words that came before it.
@@ -103,53 +113,42 @@ def train_model(X, y):
 	#TODO: figure out if this should be done here or in another function
 	#figure out encoding of y 
 	# truncate and pad input sequences
-	X_train = sequence.pad_sequences(X_train, maxlen=max_sentence_length)
-	y_train = sequence.pad_sequences(y_train, maxlen=max_sentence_length)
+	X = sequence.pad_sequences(X, maxlen=max_sentence_length)
+	y = sequence.pad_sequences(y, maxlen=max_sentence_length)
 
-	# one hot encode the output word
-	# this gives the y array an extra dimension the size of the vocabulary
-	y_train = keras.utils.to_categorical(y_train)
+	print "x shape after one hot encoding: ", X.shape
+	print "y shape after one hot encoding: ", y.shape
 	
 	# create the model
-	embedding_vector_length = 32
 	#TODO: fix this (https://keras.io/getting-started/sequential-model-guide/)
+	hiddenStateSize = 128
+	hiddenLayerSize = 128
+	word_vec_size = vocab_size + first_index
 	model = Sequential()
-	model.add()
-	model.add(LSTM(100))
-	model.add(Dense(1, activation='sigmoid'))
-	model.compile(loss='categorical_crossentropy', optimizer='adam')
+	in_shape = (max_sentence_length, word_vec_size)
+	lstm = LSTM(hiddenStateSize, return_sequences=True, input_shape=in_shape)
+	model.add(lstm)
+	# Using the TimeDistributed wrapper allows us to apply a layer to every 
+	# slice of the sentences (output a prediction after each word.)
+	model.add(TimeDistributed(Dense(hiddenLayerSize, activation='relu')))
+	#TODO: add dropout layer?
+	model.add(TimeDistributed(Dense(word_vec_size, activation='softmax')))
+	model.compile(loss='categorical_crossentropy', optimizer=RMSprop(lr=0.001))
 	print(model.summary())
-	model.fit(X_train, y_train, nb_epoch=3, batch_size=64)
+	model.fit(X, y, nb_epoch=3, batch_size=64)
+	return model
 
 # Create conservative model and liberal model and save to file
 def create_and_save_models():
-
-def evaluate():
-	# Final evaluation of the model
-	print "testing model"
-	scores = model.evaluate(X_test, y_test, verbose=0)
-	predictions = model.predict_classes(X_test)
-	print "predictions are: ", predictions
-	print("Accuracy: %.2f%%" % (scores[1]*100))
+	#TODO: finish
+	model.save('my_model.h5')
 
 def main():
-	# Load neutral data, label as 0
-	neutral_data_file = open("neutral.data", "r")
-	neutral_sentences = read_data_file(neutral_data_file)
-	y = np.zeros(len(neutral_sentences))
-
-	# Load liberal data, label as 1
-	liberal_data_file = open("liberal.data", "r")
-	liberal_sentences = read_data_file(liberal_data_file)
-	y = np.zeros(len(liberal_sentences))
-
-	# Load conservative data, label as -1
-	conservative_data_file = open("liberal.data", "r")
-	conservative_sentences = read_data_file(conservative_data_file)
-	y = np.zeros(len(conservative_sentences))
+	x_neutral, y_neutral = load_training_data("data/neutral_train.txt")
+	model = train_model(x_neutral, y_neutral)
 
 	# Train liberal vs. neutral
-	# model.save('my_model.h5')  # creates a HDF5 file 'my_model.h5'
+	#   # creates a HDF5 file 'my_model.h5'
 	# del model  # deletes the existing model
 
 
