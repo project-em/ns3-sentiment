@@ -124,9 +124,33 @@ def train_model(X, y):
 # Create conservative model and liberal model and save to file
 def create_and_save_models():
 
+def evaluate():
+	# Final evaluation of the model
+	print "testing model"
+	scores = model.evaluate(X_test, y_test, verbose=0)
+	predictions = model.predict_classes(X_test)
+	print "predictions are: ", predictions
+	print("Accuracy: %.2f%%" % (scores[1]*100))
 
 def main():
-	
+	# Load neutral data, label as 0
+	neutral_data_file = open("neutral.data", "r")
+	neutral_sentences = read_data_file(neutral_data_file)
+	y = np.zeros(len(neutral_sentences))
+
+	# Load liberal data, label as 1
+	liberal_data_file = open("liberal.data", "r")
+	liberal_sentences = read_data_file(liberal_data_file)
+	y = np.zeros(len(liberal_sentences))
+
+	# Load conservative data, label as -1
+	conservative_data_file = open("liberal.data", "r")
+	conservative_sentences = read_data_file(conservative_data_file)
+	y = np.zeros(len(conservative_sentences))
+
+	# Train liberal vs. neutral
+	# model.save('my_model.h5')  # creates a HDF5 file 'my_model.h5'
+	# del model  # deletes the existing model
 
 
 if __name__ == '__main__':
