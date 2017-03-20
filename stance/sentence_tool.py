@@ -3,21 +3,27 @@ import sys
 import psycopg2
 import nltk.data
 from keras.models import load_model
+from dotenv import load_dotenv, find_dotenv
 
-PASSWORD = os.getenv("PASSWORD")
-USER = os.getenv("USER")
-DATABASE = os.getenv("DATABASE")
-PORT = os.getenv("PORT")
-HOST = os.getenv("HOST")
+def connect():
+    load_dotenv(find_dotenv())
+    PASSWORD = os.getenv("PASSWORD")
+    DATABASE = os.getenv("DATABASE")
+    PORT = os.getenv("PORT")
+    HOST = os.getenv("HOST")
 
-# Connection to the SQL table
-connection = psycopg2.connect(
-    host = HOST,
-    database = DATABASE,
-    port = PORT,
-    user = USER,
-    password = PASSWORD
-)
+    print PASSWORD
+
+    # Connection to the SQL table
+    connection = psycopg2.connect(
+        host = HOST,
+        database = DATABASE,
+        port = PORT,
+        user = 'pxwgadeeffddil',
+        password = PASSWORD
+    )
+
+    return connection
 
 
 # Writes the sentences to liberal and conservative data files
@@ -29,7 +35,8 @@ def write_to_files():
 
     for row in articles:
         text = row[2]
-        sourceId = row[8]
+        sourceId = row[9]
+        print int(sourceId)
 
         # Load NLTK sentence tokenizer
         sent_detector = nltk.data.load('tokenizers/punkt/english.pickle')
@@ -45,6 +52,7 @@ def write_to_files():
 
 # Labels sentences with bias and stores them into the SQL table
 def label_sentences():
+    connection = connect()
     cur = connection.cursor()
 
     # Load Keras model here
@@ -71,6 +79,7 @@ def label_sentences():
 
 # Fetches the articles from the SQL table
 def fetch_articles():
+    connection = connect()
     cur = connection.cursor()
 
     cur.execute("SELECT * FROM article;")
