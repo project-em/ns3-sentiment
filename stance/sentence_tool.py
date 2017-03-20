@@ -3,6 +3,7 @@ import sys
 import psycopg2
 import nltk.data
 from keras.models import load_model
+from dueling_lstms import label_sentence
 from dotenv import load_dotenv, find_dotenv
 
 def connect():
@@ -52,6 +53,9 @@ def write_to_files():
 
 # Labels sentences with bias and stores them into the SQL table
 def label_sentences():
+    conservative_model = load_model('conservative_model.h5')
+    liberal_model = load_model('liberal_model.h5')
+
     connection = connect()
     cur = connection.cursor()
 
@@ -72,6 +76,8 @@ def label_sentences():
             # Label sentence here using our model
             score = 0.1
 
+            # score = label_sentence(conservative_model, liberal_model, sentence)
+
             # Store the sentence in the SQL table
             cur.execute("INSERT INTO sentence (" + r'"text", "bias", "createdAt", "updatedAt", "articleId"' + ") VALUES (%s, %s, NOW(), NOW(), %s)", (sentence, str(score), str(articleId)))
 
@@ -83,6 +89,14 @@ def fetch_articles():
     cur = connection.cursor()
 
     cur.execute("SELECT * FROM article;")
+    return cur.fetchall()
+
+# Fetches the articles from the SQL table
+def fetch_sentences():
+    connection = connect()
+    cur = connection.cursor()
+
+    cur.execute("SELECT * FROM sentence;")
     return cur.fetchall()
 
 
