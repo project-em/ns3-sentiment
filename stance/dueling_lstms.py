@@ -18,7 +18,6 @@ sentence_start = 1
 unknown_token = 2
 first_index = 3
 
-
 # Use the vocabulary to turn a sentence into two integer vectors, the
 # X vector which is the sentence beginning with the sentence_start token, 
 # and the y vector which is the sentence shifted left by one
