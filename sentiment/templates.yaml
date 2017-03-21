@@ -1,3 +1,0 @@
-start: Hello, how can I help you today?
-
-response: Sure, here's what I've found in the news for {{ topic }}. Apparently, {{ opinion }}, according to {{ source}}
