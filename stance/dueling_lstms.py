@@ -1,14 +1,23 @@
 import json
 import numpy as np
+from article_utils import read_data_file
 from collections import Counter
+from enum import Enum
 from keras.layers import Activation, Dense
 from keras.layers import LSTM
 from keras.layers.wrappers import TimeDistributed
+from keras.models import load_model
 from keras.models import Sequential
 from keras.optimizers import RMSprop
 from keras.preprocessing import sequence
 from keras.utils import np_utils
-from nltk.tokenize import wordpunct_tokenize as tokenize
+from nltk.tokenize import wordpunct_tokenize as word_tokenize
+from typing import Dict, Tuple, List
+
+# Conservative or liberal model types for loading data
+class SourceStance(Enum):
+    conservative = 1
+    liberal = 2
 
 # Variables used for both training and scoring sentences
 max_sentence_length = 50
@@ -17,6 +26,7 @@ sentence_end = 0
 sentence_start = 1
 unknown_token = 2
 first_index = 3
+word_vec_size = vocab_size + first_index
 
 # Use the vocabulary to turn a sentence into two integer vectors, the
 # X vector which is the sentence beginning with the sentence_start token, 
@@ -26,6 +36,7 @@ first_index = 3
 # note: this means tokenization should be done before calling this method
 # returns a tuple of the x sentence and the y sentence
 def sentence_to_sequences(vocab, words):
+    # type: (Dict[str, int], List[str]) -> Tuple[List[int], List[int]]
     x_words = [sentence_start]
     y_words = []
     for word in words:
@@ -49,32 +60,32 @@ def sentence_to_sequences(vocab, words):
 # returns a 3-tuple containing two numpy arrays- x and y
 # and a map of vocab to the integers used to encode it
 def load_training_data(filename):
-    datafile = open(filename, 'r')
+    # type: (str) -> Tuple[np.array, np.array, Dict[str, int]]
 
     print "loading sentences"
-    lines = datafile.readlines()
-
-    all_words = dict()
+    datafile = open(filename, 'r')
+    sentences = read_data_file(datafile)
 
     # Count the frequency of each word in the dataset
     word_counts = Counter()
     # We have to tokenize the words to do this so keep the tokenized version
     word_lines = []
-    for line in lines:
-        words = tokenize(line)
+    for sentence in sentences:
+        words = word_tokenize(sentence)
         word_lines.append(words)
         for word in words:
             word_counts[word] += 1
 
     # free up some space
-    del lines
+    del sentences
 
     # Create a dictionary of the vocabulary where each word is associated
     # with an integer.
     # Using integer representations instead of full words when training the
     # model will save space.
+    common_words = [comm[0] for comm in word_counts.most_common(vocab_size)]
     word_indices = range(first_index, vocab_size + first_index)
-    vocab = dict(zip(word_counts.most_common(vocab_size), word_indices))
+    vocab = dict(zip(common_words, word_indices))
 
     x_train_arr = []
     y_train_arr = []
@@ -93,21 +104,22 @@ def load_training_data(filename):
     y_train = np.array(y_train_arr)
     return (x_train, y_train, vocab)
 
-
+# Define the LSTM layers and train the model
 def train_model(X, y):
+    # type: (np.array, np.array) -> Sequential
+
     # truncate and pad input sequences
     X = sequence.pad_sequences(X, maxlen=max_sentence_length)
     y = sequence.pad_sequences(y, maxlen=max_sentence_length)
 
-    print "x shape after one hot encoding: ", X.shape
-    print "y shape after one hot encoding: ", y.shape
+    print "Shape of X training array: ", X.shape
+    print "Shape of Y training array: ", y.shape
 
     # model parameters
     hiddenStateSize = 128
     hiddenLayerSize = 128
     batch_size = 64
     epochs = 1
-    word_vec_size = vocab_size + first_index
 
     # create the model
     model = Sequential()
@@ -119,6 +131,7 @@ def train_model(X, y):
     model.add(TimeDistributed(Dense(hiddenLayerSize, activation='relu')))
     # TODO: add dropout layer?
     model.add(TimeDistributed(Dense(word_vec_size, activation='softmax')))
+    # loss function categorical because each possible next word is a category
     model.compile(loss='categorical_crossentropy', optimizer=RMSprop(lr=0.001))
     print(model.summary())
 
@@ -133,7 +146,7 @@ def create_and_save_models():
     cons_train_file = "data/conservative_train.txt"
     x_cons, y_cons, vocab_cons = load_training_data(cons_train_file)
     # save vocab for encoding test sentences later
-    with open("conservative_vocab.json") as f:
+    with open("conservative_vocab.json", 'w') as f:
         json.dump(vocab_cons, f)
     del vocab_cons
 
@@ -146,7 +159,7 @@ def create_and_save_models():
     lib_train_file = "data/liberal_train.txt"
     x_lib, y_lib, vocab_lib = load_training_data(lib_train_file)
     # save vocab for encoding test sentences later
-    with open("liberal_vocab.json") as f:
+    with open("liberal_vocab.json", 'w') as f:
         json.dump(vocab_lib, f)
     del vocab_lib
 
@@ -162,45 +175,73 @@ def create_and_save_models():
 # Computes the likelihood of each word in the sentence given the previous
 # words and multiplies these probabilities to get an overall probability
 def score_sentence(model, x_words_encoded, y_words):
+    # type: (Sequential, np.array, np.array) -> float
     # TODO: test this to see what size/format
+    X = np.expand_dims(x_words_encoded, axis=0)
+    X = sequence.pad_sequences(X, maxlen=max_sentence_length)
     # get a numpy array of probability predictions
-    word_probs = model.predict_proba(x_words_encoded)
-    # for each word, get the probability of the next word being next
-    print "probability prediction shape: ", word_probs.shape
-    print "prob prediction: ", word_probs
-
-    word_predict = model.predict(x_words_encoded)
-    print "word prediction shape: ", word_predict.shape
-    print "word predictions: ", word_predict
-
+    word_probs = model.predict_proba(X)
+    word_probs = np.squeeze(word_probs, axis=(0,))
     # the probability of a sentence is the product of probabilities
     # of each word given the words that came before it.
+    sentence_prob = 0
+    for (sentence_pos, word_index) in enumerate(y_words):
+        # use log probabilities and sum them so we don't get underflow
+        word_pos_prob = np.log(word_probs[sentence_pos, word_index])
+        sentence_prob += word_pos_prob
+        #TODO: remove debug statement
+        print "sentence pos is : ", sentence_pos, " and word index is: ", word_index, " and prob is: ", word_pos_prob
 
-    # TODO: we use log probabilities and sum them so we don't get underflow
-
-
+    # TODO: do in batch?
+    return sentence_prob
 
 # predict a label for a sentence as conservative, neutral, or liberal
 # -1 represents conservative, 0 is neutral, and 1 is liberal
 def label_sentence(cons_model, lib_model, cons_vocab, lib_vocab, sentence):
-    x_cons, y_cons = sentence_to_sequences(cons_model, tokenize(sentence))
+    # type: (Sequential, Sequential, Dict[str, int], Dict[str, int]) -> int
+    # put sentence in lowercase because training data/vocab is read in lowercase
+    sentence = sentence.lower()
 
-    # one hot encode the input sentence
-    x_cons = np_utils.to_categorical(x_cons, vocab_size + first_index)
+    # Get a prediction from the conservative model
+    x_cons, y_cons = sentence_to_sequences(cons_vocab, word_tokenize(sentence))
+    # one hot encode the sentence to get a score for it
+    x_cons_hot = np_utils.to_categorical(x_cons, word_vec_size)
+    cons_score = score_sentence(cons_model, x_cons_hot, y_cons)
 
-    cons_score = score_sentence(cons_model, x_cons, y_cons)
+    # Get a prediction from the liberal model
+    x_lib, y_lib = sentence_to_sequences(lib_vocab, word_tokenize(sentence))
+    # one hot encode the sentence to get a score for it
+    x_lib_hot = np_utils.to_categorical(x_lib, word_vec_size)
+    lib_score = score_sentence(lib_model, x_lib_hot, y_lib)
 
+    print "conservative score is: ", cons_score,  " and liberal score is: ", lib_score
 
+    # TODO: determine threshold of difference between scores and return int label
 
-    # TODO: write intermediate output to file or DB?
-
-    # word number 3
+# Load a model and the vocab encoding needed to test the probability
+# of a sentence within that model.
+def reload_model(stance):
+    # type: (SourceStance) -> Tuple[Sequential, Dict[str, int]]
+    if stance == SourceStance.conservative:
+        model = load_model("conservative_model.h5")
+        with open("conservative_vocab.json", 'r') as f:
+            vocab = json.load(f)
+        return (model, vocab)
+    else:
+        model = load_model("liberal_model.h5")
+        with open("liberal_vocab.json", 'r') as f:
+            vocab = json.load(f)
+        return (model, vocab)
 
 # TODO: remove this testing code
 def main():
-    x_neutral, y_neutral, vocab = load_training_data("data/neutral_train.txt")
-    model = train_model(x_neutral, y_neutral)
-    model.save('conservative_model.h5')
+    # x_neutral, y_neutral, vocab = load_training_data("data/neutral_train.txt")
+    # model = train_model(x_neutral, y_neutral)
+    # model.save('conservative_model.h5')
+    # with open("conservative_vocab.json", 'w') as f:
+    #     json.dump(vocab, f)
+
+    model, vocab = reload_model(SourceStance.conservative)
 
     datafile = open("data/neutral_test.txt", 'r')
 
