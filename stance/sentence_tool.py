@@ -26,30 +26,6 @@ def connect():
     return connection
 
 
-# Writes the sentences to liberal and conservative data files
-def write_to_files():
-    articles = fetch_articles()
-
-    conservative_file = open('data/conservative.dat', 'w+')
-    liberal_file = open('data/liberal.dat', 'w+')
-
-    for row in articles:
-        text = row[2]
-        sourceId = row[9]
-        print int(sourceId)
-
-        # Load NLTK sentence tokenizer
-        sent_detector = nltk.data.load('tokenizers/punkt/english.pickle')
-        sentences = sent_detector.tokenize(text.decode('utf-8'))
-
-        for sentence in sentences:
-            # Right now sourceId 5 is the only conservative source
-            if int(sourceId) != 5:
-                liberal_file.write(sentence.encode('utf-8') + os.linesep)
-            else:
-                conservative_file.write(sentence.encode('utf-8') + os.linesep)
-
-
 # Labels sentences with bias and stores them into the SQL table
 def label_sentences():
     cons_model, cons_vocab = reload_model(SourceStance.conservative)
@@ -104,15 +80,7 @@ def fetch_sentences():
 # Run program with 'label' to label sentences and put them in the DB
 # Run program with 'write' to write sentences to conservative and liberal data files
 def main():
-    if (len(sys.argv) > 1):
-        if (sys.argv[1] == "label"):
-            label_sentences()
-        elif (sys.argv[1] == "write"):
-            write_to_files()
-        else:
-            print "Please supply an argument of \'label\' or \'write\'"
-    else:
-        print "Please supply an argument of \'label\' or \'write\'"
+    label_sentences()
 
 if __name__ == '__main__':
     main()
