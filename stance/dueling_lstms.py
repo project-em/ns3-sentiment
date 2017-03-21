@@ -12,7 +12,7 @@ from keras.optimizers import RMSprop
 from keras.preprocessing import sequence
 from keras.utils import np_utils
 from nltk.tokenize import wordpunct_tokenize as word_tokenize
-from typing import Dict, Tuple, List
+from typing import Dict, Tuple, List, Generator
 
 # Conservative or liberal model types for loading data
 class SourceStance(Enum):
@@ -65,15 +65,15 @@ def sentence_to_sequences(vocab, words):
 
 # TRAINING ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-# Load data for training dueling sentence model
+# Create dictionary of words for training sentence model
 # filename- full path to file to read sentences from
 # there should be one sentence on each line in the file
-# returns a 3-tuple containing two numpy arrays- x and y
-# and a map of vocab to the integers used to encode it
-def load_training_data(filename):
-    # type: (str) -> Tuple[np.array, np.array, Dict[str, int]]
+# returns a tuple containing the number of sentences in the file
+# and the dictionary mapping words to int encodings
+def create_vocab(filename):
+    # type: (str) -> Tuple[int, Dict[str, int]]
 
-    print("loading sentences")
+    print("creating vocabulary")
     datafile = open(filename, 'r')
     sentences = [line.lower() for line in datafile.readlines()]
 
@@ -87,51 +87,54 @@ def load_training_data(filename):
         for word in words:
             word_counts[word] += 1
 
-    # free up some space
-    del sentences
-
     # Create a dictionary of the vocabulary where each word is associated
     # with an integer.
     # Using integer representations instead of full words when training the
     # model will save space.
     common_words = [comm[0] for comm in word_counts.most_common(vocab_size)]
     word_indices = range(first_index, vocab_size + first_index)
-    vocab = dict(zip(common_words, word_indices))
+    return len(sentences), dict(zip(common_words, word_indices))
 
-    x_train_arr = []
-    y_train_arr = []
-    for words in word_lines:
-        (x_words, y_words) = sentence_to_sequences(vocab, words)
+# Generator for batches of data for training
+# Necessary because training on all the data at once leads to memory issues
+def gen_training_data(filename, vocab, batch_size):
+    # type: (str, Dict[str, int], int) -> Generator[Tuple[np.array,np.array], None, None]
 
-        # one hot encode the words
-        # this gives the arrays an extra dimension the size of the vocabulary
-        x_words = np_utils.to_categorical(x_words, vocab_size + first_index)
-        y_words = np_utils.to_categorical(y_words, vocab_size + first_index)
+    datafile = open(filename, 'r')
+    while(True):
+        batch_sentences = [datafile.readline().lower().strip() for i in range(batch_size)]
+        x_batch_arr = []
+        y_batch_arr = []
+        for sentence in batch_sentences:
+            words = word_tokenize(sentence)
+            (x_words, y_words) = sentence_to_sequences(vocab, words)
 
-        x_train_arr.append(x_words)
-        y_train_arr.append(y_words)
+            # one hot encode the words
+            # this gives the arrays an extra dimension the size of the vocabulary
+            x_words = np_utils.to_categorical(x_words, vocab_size + first_index)
+            y_words = np_utils.to_categorical(y_words, vocab_size + first_index)
 
-    x_train = np.array(x_train_arr)
-    y_train = np.array(y_train_arr)
-    return (x_train, y_train, vocab)
+            x_batch_arr.append(x_words)
+            y_batch_arr.append(y_words)
+
+        x_batch = np.array(x_batch_arr)
+        y_batch = np.array(y_batch_arr)
+
+        x_batch = sequence.pad_sequences(x_batch, maxlen=max_sentence_length)
+        y_batch = sequence.pad_sequences(y_batch, maxlen=max_sentence_length)
+        yield x_batch, y_batch
 
 # Define the LSTM layers and train the model
-def train_model(X, y):
-    # type: (np.array, np.array) -> Sequential
+def train_model(filename, num_lines, vocab):
+    # type: (str, int, Dict[str, int]) -> Sequential
 
     print("training model")
-    # truncate and pad input sequences
-    X = sequence.pad_sequences(X, maxlen=max_sentence_length)
-    y = sequence.pad_sequences(y, maxlen=max_sentence_length)
-
-    print("Shape of X training array: ", X.shape)
-    print("Shape of Y training array: ", y.shape)
 
     # model parameters
     hiddenStateSize = 128
     hiddenLayerSize = 128
     batch_size = 64
-    epochs = 1
+    epochs = 3
 
     # create the model
     model = Sequential()
@@ -148,7 +151,8 @@ def train_model(X, y):
     print(model.summary())
 
     # Train the model
-    model.fit(X, y, nb_epoch=epochs, batch_size=batch_size)
+    generator = gen_training_data(filename=filename, vocab=vocab, batch_size=batch_size)
+    model.fit_generator(generator, nb_epoch=epochs, samples_per_epoch=num_lines)
     return model
 
 
@@ -156,31 +160,27 @@ def train_model(X, y):
 def create_and_save_models():
     os.makedirs(model_dir, exist_ok=True)
     # Get conservative word encoding
-    x_cons, y_cons, vocab_cons = load_training_data(cons_train_file)
+    n_cons, vocab_cons = create_vocab(cons_train_file)
 
     # save vocab for encoding test sentences later
     with open(cons_vocab_file, 'w') as f:
         json.dump(vocab_cons, f)
-    del vocab_cons
 
     # train conservative model on conservative article data
-    conservative_model = train_model(x_cons, y_cons)
-    del x_cons
-    del y_cons
+    conservative_model = train_model(cons_train_file, n_cons, vocab_cons)
+    del vocab_cons
     conservative_model.save(cons_model_file)
     del conservative_model
 
     # Get liberal word encoding
-    x_lib, y_lib, vocab_lib = load_training_data(lib_train_file)
+    n_lib, vocab_lib = create_vocab(lib_train_file)
     # save vocab for encoding test sentences later
     with open(lib_vocab_file, 'w') as f:
         json.dump(vocab_lib, f)
-    del vocab_lib
 
     # train liberal model on liberal article data
-    liberal_model = train_model(x_lib, y_lib)
-    del x_lib
-    del y_lib
+    liberal_model = train_model(lib_train_file, n_lib, vocab_lib)
+    del vocab_lib
     liberal_model.save(lib_model_file)
     del liberal_model
 
@@ -190,18 +190,20 @@ def create_and_save_models():
 # Score the likelihood of a sentence under a given model
 # Computes the likelihood of each word in the sentence given the previous
 # words and multiplies these probabilities to get an overall probability
-def score_sentence(model, x_words_encoded, y_words):
+def score_sentence(model, X, y):
     # type: (Sequential, np.array, np.array) -> float
     # TODO: test this to see what size/format
-    X = np.expand_dims(x_words_encoded, axis=0)
-    X = sequence.pad_sequences(X, maxlen=max_sentence_length)
+    # one hot encode the sentence to get a score for it
+    X_hot = np_utils.to_categorical(X, word_vec_size)
+    X_hot = np.expand_dims(X_hot, axis=0)
+    X_hot = sequence.pad_sequences(X_hot, maxlen=max_sentence_length)
     # get a numpy array of probability predictions
-    word_probs = model.predict_proba(X)
+    word_probs = model.predict_proba(X_hot)
     word_probs = np.squeeze(word_probs, axis=(0,))
     # the probability of a sentence is the product of probabilities
     # of each word given the words that came before it.
     sentence_prob = 0
-    for (sentence_pos, word_index) in enumerate(y_words):
+    for (sentence_pos, word_index) in enumerate(y):
         # use log probabilities and sum them so we don't get underflow
         word_pos_prob = np.log(word_probs[sentence_pos, word_index])
         sentence_prob += word_pos_prob
@@ -222,15 +224,11 @@ def label_sentence(cons_model, lib_model, cons_vocab, lib_vocab, sentence):
 
     # Get a prediction from the conservative model
     x_cons, y_cons = sentence_to_sequences(cons_vocab, word_tokenize(sentence))
-    # one hot encode the sentence to get a score for it
-    x_cons_hot = np_utils.to_categorical(x_cons, word_vec_size)
-    cons_score = score_sentence(cons_model, x_cons_hot, y_cons)
+    cons_score = score_sentence(cons_model, x_cons, y_cons)
 
     # Get a prediction from the liberal model
     x_lib, y_lib = sentence_to_sequences(lib_vocab, word_tokenize(sentence))
-    # one hot encode the sentence to get a score for it
-    x_lib_hot = np_utils.to_categorical(x_lib, word_vec_size)
-    lib_score = score_sentence(lib_model, x_lib_hot, y_lib)
+    lib_score = score_sentence(lib_model, x_lib, y_lib)
 
     print("conservative score is: ", cons_score,
           " and liberal score is: ", lib_score)
