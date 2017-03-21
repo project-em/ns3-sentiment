@@ -1,7 +1,6 @@
 import json
 import numpy as np
 import os
-from article_utils import read_data_file
 from collections import Counter
 from enum import Enum
 from keras.layers import Activation, Dense
@@ -76,7 +75,7 @@ def load_training_data(filename):
 
     print("loading sentences")
     datafile = open(filename, 'r')
-    sentences = read_data_file(datafile)
+    sentences = [line.lower() for line in datafile.readlines()]
 
     # Count the frequency of each word in the dataset
     word_counts = Counter()
