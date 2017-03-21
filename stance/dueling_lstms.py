@@ -1,5 +1,6 @@
 import json
 import numpy as np
+import os
 from article_utils import read_data_file
 from collections import Counter
 from enum import Enum
@@ -18,6 +19,17 @@ from typing import Dict, Tuple, List
 class SourceStance(Enum):
     conservative = 1
     liberal = 2
+
+# Filenames of training data
+cons_train_file = "data/conservative.dat"
+lib_train_file = "data/liberal.dat"
+
+# Filenames in which to save/load models
+model_dir = "models/"
+cons_model_file = model_dir + "conservative_model.h5"
+cons_vocab_file = model_dir + "conservative_vocab.json"
+lib_model_file = model_dir + "liberal_model.h5"
+lib_vocab_file = model_dir + "liberal_vocab.json"
 
 # Variables used for both training and scoring sentences
 max_sentence_length = 50
@@ -142,30 +154,30 @@ def train_model(X, y):
 
 # Create conservative model and liberal model and save to file
 def create_and_save_models():
+    os.makedirs(model_dir, exist_ok=True)
     # Get conservative word encoding
-    cons_train_file = "data/conservative_train.txt"
     x_cons, y_cons, vocab_cons = load_training_data(cons_train_file)
+
     # save vocab for encoding test sentences later
-    with open("conservative_vocab.json", 'w') as f:
+    with open(cons_vocab_file, 'w') as f:
         json.dump(vocab_cons, f)
     del vocab_cons
 
     # train conservative model on conservative article data
     conservative_model = train_model(x_cons, y_cons)
-    conservative_model.save('conservative_model.h5')
+    conservative_model.save(cons_model_file)
     del conservative_model
 
     # Get liberal word encoding
-    lib_train_file = "data/liberal_train.txt"
     x_lib, y_lib, vocab_lib = load_training_data(lib_train_file)
     # save vocab for encoding test sentences later
-    with open("liberal_vocab.json", 'w') as f:
+    with open(lib_vocab_file, 'w') as f:
         json.dump(vocab_lib, f)
     del vocab_lib
 
     # train liberal model on liberal article data
     liberal_model = train_model(x_lib, y_lib)
-    liberal_model.save('liberal_model.h5')
+    liberal_model.save(lib_model_file)
     del liberal_model
 
 
@@ -225,31 +237,18 @@ def label_sentence(cons_model, lib_model, cons_vocab, lib_vocab, sentence):
 def reload_model(stance):
     # type: (SourceStance) -> Tuple[Sequential, Dict[str, int]]
     if stance == SourceStance.conservative:
-        model = load_model("conservative_model.h5")
-        with open("conservative_vocab.json", 'r') as f:
+        model = load_model(cons_model_file)
+        with open(cons_vocab_file, 'r') as f:
             vocab = json.load(f)
         return (model, vocab)
     else:
-        model = load_model("liberal_model.h5")
-        with open("liberal_vocab.json", 'r') as f:
+        model = load_model(lib_model_file)
+        with open(lib_vocab_file, 'r') as f:
             vocab = json.load(f)
         return (model, vocab)
 
-# TODO: remove this testing code
 def main():
-    # x_neutral, y_neutral, vocab = load_training_data("data/neutral_train.txt")
-    # model = train_model(x_neutral, y_neutral)
-    # model.save('conservative_model.h5')
-    # with open("conservative_vocab.json", 'w') as f:
-    #     json.dump(vocab, f)
-
-    model, vocab = reload_model(SourceStance.conservative)
-
-    datafile = open("data/neutral_test.txt", 'r')
-
-    print "loading sentences"
-    lines = datafile.readlines()
-    label_sentence(model, None, vocab, None, lines[0])
+    create_and_save_models()
 
 if __name__ == '__main__':
     main()
