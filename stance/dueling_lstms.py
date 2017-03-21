@@ -74,7 +74,7 @@ def sentence_to_sequences(vocab, words):
 def load_training_data(filename):
     # type: (str) -> Tuple[np.array, np.array, Dict[str, int]]
 
-    print "loading sentences"
+    print("loading sentences")
     datafile = open(filename, 'r')
     sentences = read_data_file(datafile)
 
@@ -124,8 +124,8 @@ def train_model(X, y):
     X = sequence.pad_sequences(X, maxlen=max_sentence_length)
     y = sequence.pad_sequences(y, maxlen=max_sentence_length)
 
-    print "Shape of X training array: ", X.shape
-    print "Shape of Y training array: ", y.shape
+    print("Shape of X training array: ", X.shape)
+    print("Shape of Y training array: ", y.shape)
 
     # model parameters
     hiddenStateSize = 128
@@ -202,7 +202,9 @@ def score_sentence(model, x_words_encoded, y_words):
         word_pos_prob = np.log(word_probs[sentence_pos, word_index])
         sentence_prob += word_pos_prob
         #TODO: remove debug statement
-        print "sentence pos is : ", sentence_pos, " and word index is: ", word_index, " and prob is: ", word_pos_prob
+        print("sentence pos is : ", sentence_pos,
+              " and word index is: ", word_index,
+              " and prob is: ", word_pos_prob)
 
     # TODO: do in batch?
     return sentence_prob
@@ -226,7 +228,8 @@ def label_sentence(cons_model, lib_model, cons_vocab, lib_vocab, sentence):
     x_lib_hot = np_utils.to_categorical(x_lib, word_vec_size)
     lib_score = score_sentence(lib_model, x_lib_hot, y_lib)
 
-    print "conservative score is: ", cons_score,  " and liberal score is: ", lib_score
+    print("conservative score is: ", cons_score,
+          " and liberal score is: ", lib_score)
 
     # TODO: determine threshold of difference between scores and return int label
     # right now returning dummy number
