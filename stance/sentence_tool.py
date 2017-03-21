@@ -2,8 +2,7 @@ import os
 import sys
 import psycopg2
 import nltk.data
-from keras.models import load_model
-from dueling_lstms import label_sentence
+from dueling_lstms import label_sentence, reload_model, SourceStance
 from dotenv import load_dotenv, find_dotenv
 
 def connect():
@@ -53,33 +52,35 @@ def write_to_files():
 
 # Labels sentences with bias and stores them into the SQL table
 def label_sentences():
-    conservative_model = load_model('conservative_model.h5')
-    liberal_model = load_model('liberal_model.h5')
+    cons_model, cons_vocab = reload_model(SourceStance.conservative)
+    lib_model, lib_vocab = reload_model(SourceStance.liberal)
 
     connection = connect()
     cur = connection.cursor()
 
-    # Load Keras model here
-    # model = load_model('my_model.h5')
-
-    articles = fetch_articles();
+    articles = fetch_articles()
 
     for row in articles:
         text = row[2]
         articleId = row[0]
 
-        # Load NLTK sentence tokenizer
+        # Load NLTK sentence tokenizer and run it on the article
         sent_detector = nltk.data.load('tokenizers/punkt/english.pickle')
-        sentences = sent_detector.tokenize(text.decode('utf-8'))
+        sentences = sent_detector.tokenize(text.decode('utf-8', 'ignore'))
 
         for sentence in sentences:
-            # Label sentence here using our model
-            score = 0.1
-
-            # score = label_sentence(conservative_model, liberal_model, sentence)
+            # Label sentence here using our dueling models
+            score = label_sentence(cons_model=cons_model,
+                                   lib_model=lib_model,
+                                   cons_vocab=cons_vocab,
+                                   lib_vocab=lib_vocab,
+                                   sentence=sentence)
 
             # Store the sentence in the SQL table
-            cur.execute("INSERT INTO sentence (" + r'"text", "bias", "createdAt", "updatedAt", "articleId"' + ") VALUES (%s, %s, NOW(), NOW(), %s)", (sentence, str(score), str(articleId)))
+            cur.execute("INSERT INTO sentence ("
+                        + r'"text", "bias", "createdAt", "updatedAt", "articleId"'
+                        + ") VALUES (%s, %s, NOW(), NOW(), %s)",
+                        (sentence, str(score), str(articleId)))
 
     connection.commit()
 

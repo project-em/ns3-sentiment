@@ -1,6 +1,5 @@
-flask-restplus
 scipy
 scikit-learn
 numpy
 nltk
-gunicorn
+keras

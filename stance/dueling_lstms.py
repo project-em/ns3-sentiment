@@ -217,6 +217,8 @@ def label_sentence(cons_model, lib_model, cons_vocab, lib_vocab, sentence):
     print "conservative score is: ", cons_score,  " and liberal score is: ", lib_score
 
     # TODO: determine threshold of difference between scores and return int label
+    # right now returning dummy number
+    return 0
 
 # Load a model and the vocab encoding needed to test the probability
 # of a sentence within that model.
