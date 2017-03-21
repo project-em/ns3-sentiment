@@ -31,7 +31,7 @@ lib_model_file = model_dir + "liberal_model.h5"
 lib_vocab_file = model_dir + "liberal_vocab.json"
 
 # Variables used for both training and scoring sentences
-max_sentence_length = 50
+max_sentence_length = 35
 vocab_size = 8000
 sentence_end = 0
 sentence_start = 1
@@ -119,6 +119,7 @@ def load_training_data(filename):
 def train_model(X, y):
     # type: (np.array, np.array) -> Sequential
 
+    print("training model")
     # truncate and pad input sequences
     X = sequence.pad_sequences(X, maxlen=max_sentence_length)
     y = sequence.pad_sequences(y, maxlen=max_sentence_length)
@@ -164,6 +165,8 @@ def create_and_save_models():
 
     # train conservative model on conservative article data
     conservative_model = train_model(x_cons, y_cons)
+    del x_cons
+    del y_cons
     conservative_model.save(cons_model_file)
     del conservative_model
 
@@ -176,6 +179,8 @@ def create_and_save_models():
 
     # train liberal model on liberal article data
     liberal_model = train_model(x_lib, y_lib)
+    del x_lib
+    del y_lib
     liberal_model.save(lib_model_file)
     del liberal_model
 
