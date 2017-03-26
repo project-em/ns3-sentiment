@@ -44,6 +44,33 @@ def fetch_articles(data_purpose):
     return articles
 
 
+def build_neutral_data():
+    # Load NLTK sentence tokenizer
+    sent_detector = nltk.data.load('tokenizers/punkt/english.pickle')
+
+    data = glob.glob("data/articles/*")
+    output_test_file = open("data/neutral_test.dat", "w+")
+    output_valid_file = open("data/neutral_valid.dat", "w+")
+    count = 0
+
+    for filename in data:
+        if count > 10000:
+            break
+        dataFile = open(filename, 'r')
+        for line in dataFile.readlines():
+            if count > 10000:
+                break
+            sentences = sent_detector.tokenize(line)
+            for i, sentence in enumerate(sentences):
+                if (i + count) < 5000:
+                    output_test_file.write(sentence.strip() + os.linesep)
+                elif (i + count) < 10000:
+                    output_valid_file.write(sentence.strip() + os.linesep)
+                else:
+                    break
+            count += len(sentences)
+
+
 
 # Given the name of an article folder (conservative, liberal, or neutral) read the 
 # articles from that folder and split them into sentences in a file of that name.
@@ -111,9 +138,7 @@ def create_combined_data(data_purpose):
                 training_file.write(sentence.encode('utf-8').strip() + "\t1" + os.linesep)
 
 def main():
-    write_to_files(DataPurpose.training)
-    write_to_files(DataPurpose.testing)
-    write_to_files(DataPurpose.validation)
+    build_neutral_data()
 
 if __name__ == '__main__':
     main()
