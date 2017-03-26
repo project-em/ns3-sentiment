@@ -285,7 +285,6 @@ def score_sentences(model, X_hot, y):
         vocab_indices = y[:, sentence_pos]
         # get the probabilities of only the actual next word
         next_word_probs = np.array([word_pos_probs[i,w] for i,w in enumerate(vocab_indices)])
-        print("next word probs shape: ", next_word_probs.shape)
         # the product of probabilities is the sum of log probabilities
         sentence_probs = np.add(sentence_probs, next_word_probs)
 
