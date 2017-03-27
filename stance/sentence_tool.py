@@ -2,7 +2,7 @@ import os
 import sys
 import psycopg2
 import nltk.data
-from dueling_lstms import label_sentences, reload_model, SourceStance
+from dueling_lstms import compute_scale_factor, label_sentences, reload_model, SourceStance
 from dotenv import load_dotenv, find_dotenv
 
 def connect():
@@ -12,7 +12,7 @@ def connect():
     PORT = os.getenv("PORT")
     HOST = os.getenv("HOST")
 
-    print PASSWORD
+    print(PASSWORD)
 
     # Connection to the SQL table
     connection = psycopg2.connect(
@@ -27,19 +27,26 @@ def connect():
 
 
 # Labels sentences with bias and stores them into the SQL table
-def label_sentences():
+def label_database_sentences():
     cons_model, cons_vocab = reload_model(SourceStance.conservative)
     lib_model, lib_vocab = reload_model(SourceStance.liberal)
 
     connection = connect()
     cur = connection.cursor()
 
+    scaling_factor = compute_scale_factor(cons_model, lib_model, cons_vocab, lib_vocab)
+    # TODO: set threshold based on best threshold from evaluation script
+    thresh = 20
+
+    print("fetching articles")
     articles = fetch_articles()
 
+    print("labeling all sentences")
     for row in articles:
         text = row[2]
         articleId = row[0]
 
+        print("labeling one article")
         # Load NLTK sentence tokenizer and run it on the article
         sent_detector = nltk.data.load('tokenizers/punkt/english.pickle')
         sentences = sent_detector.tokenize(text.decode('utf-8', 'ignore'))
@@ -49,7 +56,9 @@ def label_sentences():
                                  lib_model=lib_model,
                                  cons_vocab=cons_vocab,
                                  lib_vocab=lib_vocab,
-                                 sentences=sentences)
+                                 sentences=sentences,
+                                 cons_scale_factor=scaling_factor,
+                                 thresh=thresh)
 
         for sentence, label in zip(sentences, labels):
             # Store the sentence in the SQL table
@@ -80,7 +89,7 @@ def fetch_sentences():
 # Run program with 'label' to label sentences and put them in the DB
 # Run program with 'write' to write sentences to conservative and liberal data files
 def main():
-    label_sentences()
+    label_database_sentences()
 
 if __name__ == '__main__':
     main()
