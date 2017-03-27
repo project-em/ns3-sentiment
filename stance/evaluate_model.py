@@ -1,8 +1,9 @@
-from sklearn.metrics import accuracy_score
+import numpy as np
 from sklearn.metrics import precision_score
-from sklearn.metrics import recall_score
+from data_prep import DataPurpose
+from dueling_lstms import compute_scale_factor
+from dueling_lstms import label_sentences
 from dueling_lstms import reload_model
-from dueling_lstms import label_sentence
 from dueling_lstms import SourceStance
 from collections import Counter
 
@@ -30,12 +31,12 @@ def eval_labeled_data():
     test_predictions = []
 
     # Label each testing sentence
-    for line in sentences_testing.readlines():
-        split = line.split("\t")
-        Y_test.append(int(split[1]))
-        sentence = split[0]
-        label = label_sentence(cons_model, lib_model, cons_model, lib_vocab, sentence)
-        test_predictions.append(label)
+    # for line in sentences_testing.readlines():
+    #     split = line.split("\t")
+    #     Y_test.append(int(split[1]))
+    #     sentence = split[0]
+    #     label = label_sentence(cons_model, lib_model, cons_model, lib_vocab, sentence)
+    #     test_predictions.append(label)
 
     # Calculate the training and testing precision scores
     training_precision = precision_score(Y_train, train_predictions)
@@ -44,63 +45,66 @@ def eval_labeled_data():
     print("Training precision: ", str(training_precision))
     print("Testing precision: ", str(testing_precision))
 
-def eval_predict_provenance():
+def eval_predict_provenance(data_purpose):
     # Filenames of testing data
-    cons_test_file = "data/testing/conservative.dat"
-    lib_test_file = "data/testing/liberal.dat"
+    if (data_purpose == DataPurpose.testing):
+        print("using test data")
+        cons_file = "data/testing/conservative.dat"
+        lib_file = "data/testing/liberal.dat"
+        neutral_file = "data/testing/neutral.dat"
+    elif (data_purpose == DataPurpose.validation):
+        print("using validation data")
+        cons_file = "data/valid/conservative.dat"
+        lib_file = "data/valid/liberal.dat"
+        neutral_file = "data/valid/neutral.dat"
 
     # Load models
     cons_model, cons_vocab = reload_model(SourceStance.conservative)
     lib_model, lib_vocab = reload_model(SourceStance.liberal)
 
-    Y_cons_test = []
-    cons_test_predictions = []
-    cons_preds_count = Counter()
+    scaling_factor = compute_scale_factor(cons_model,lib_model,cons_vocab,lib_vocab)
+    thresh = 30
 
     # Label each testing sentence
     print("labeling conservative sentences")
-    count = 0
-    for line in open(cons_test_file).readlines():
-        split = line.split("\t")
-        Y_cons_test.append(-1)
-        sentence = split[0]
-        label = label_sentence(cons_model, lib_model, cons_vocab, lib_vocab, sentence)
-        cons_preds_count[label] += 1
-        cons_test_predictions.append(label)
-        count += 1
-        if count % 100 == 0:
-            print("num sentences labeled is ", count)
+    cons_sentences = open(cons_file).readlines()
+    Y_cons_test = np.repeat(-1, len(cons_sentences))
+    cons_labels = label_sentences(cons_model,
+                                  lib_model,
+                                  cons_vocab,
+                                  lib_vocab,
+                                  cons_sentences,
+                                  cons_scale_factor=scaling_factor,
+                                  thresh=thresh)
 
     # Calculate the training and testing precision scores
-    cons_testing_precision = precision_score(Y_cons_test, cons_test_predictions, average='micro')
-
-    Y_lib_test = []
-    lib_test_predictions = []
-    lib_preds_count = Counter()
+    cons_testing_precision = precision_score(Y_cons_test, cons_labels, average='micro')
+    unique, counts = np.unique(cons_labels, return_counts=True)
+    cons_counts = dict(zip(unique, counts))
 
     # Label each testing sentence
     print("labeling liberal sentences")
-    count = 0
-    for line in open(lib_test_file).readlines():
-        split = line.split("\t")
-        Y_lib_test.append(1)
-        sentence = split[0]
-        label = label_sentence(cons_model, lib_model, cons_vocab, lib_vocab, sentence)
-        lib_preds_count[label] += 1
-        lib_test_predictions.append(label)
-        count += 1
-        if count % 100 == 0:
-            print("num sentences labeled is ", count)
+    lib_sentences = open(lib_file).readlines()
+    Y_lib_test = np.repeat(1, len(lib_sentences))
+    lib_labels = label_sentences(cons_model,
+                                 lib_model,
+                                 cons_vocab,
+                                 lib_vocab,
+                                 lib_sentences,
+                                 cons_scale_factor=scaling_factor,
+                                 thresh=thresh)
 
-    lib_testing_precision = precision_score(Y_lib_test, lib_test_predictions, average='micro')
+    lib_testing_precision = precision_score(Y_lib_test, lib_labels, average='micro')
+    unique, counts = np.unique(lib_labels, return_counts=True)
+    lib_counts = dict(zip(unique, counts))
 
     print("Conservative testing precision: ", str(cons_testing_precision))
-    print("Conservative prediction counts: ", cons_preds_count)
+    print("Conservative prediction counts: ", cons_counts)
     print("Liberal testing precision: ", str(lib_testing_precision))
-    print("Liberal prediction counts: ", lib_preds_count)
+    print("Liberal prediction counts: ", lib_counts)
 
 def main():
-    eval_predict_provenance()
+    eval_predict_provenance(DataPurpose.validation)
 
 if __name__ == '__main__':
     main()

@@ -2,7 +2,7 @@ import os
 import sys
 import psycopg2
 import nltk.data
-from dueling_lstms import label_sentence, reload_model, SourceStance
+from dueling_lstms import label_sentences, reload_model, SourceStance
 from dotenv import load_dotenv, find_dotenv
 
 def connect():
@@ -44,19 +44,19 @@ def label_sentences():
         sent_detector = nltk.data.load('tokenizers/punkt/english.pickle')
         sentences = sent_detector.tokenize(text.decode('utf-8', 'ignore'))
 
-        for sentence in sentences:
-            # Label sentence here using our dueling models
-            score = label_sentence(cons_model=cons_model,
-                                   lib_model=lib_model,
-                                   cons_vocab=cons_vocab,
-                                   lib_vocab=lib_vocab,
-                                   sentence=sentence)
+        # Label sentence here using our dueling models
+        labels = label_sentences(cons_model=cons_model,
+                                 lib_model=lib_model,
+                                 cons_vocab=cons_vocab,
+                                 lib_vocab=lib_vocab,
+                                 sentences=sentences)
 
+        for sentence, label in zip(sentences, labels):
             # Store the sentence in the SQL table
             cur.execute("INSERT INTO sentence ("
                         + r'"text", "bias", "createdAt", "updatedAt", "articleId"'
                         + ") VALUES (%s, %s, NOW(), NOW(), %s)",
-                        (sentence, str(score), str(articleId)))
+                        (sentence, str(label), str(articleId)))
 
     connection.commit()
 

@@ -3,8 +3,7 @@ import numpy as np
 import os
 from collections import Counter
 from enum import Enum
-from keras.layers import Activation, Dense
-from keras.layers import LSTM
+from keras.layers import Dense, Dropout, LSTM
 from keras.layers.wrappers import TimeDistributed
 from keras.models import load_model
 from keras.models import Sequential
@@ -20,8 +19,8 @@ class SourceStance(Enum):
     liberal = 2
 
 # Filenames of training data
-cons_train_file = "data/conservative.dat"
-lib_train_file = "data/liberal.dat"
+cons_train_file = "data/training/conservative.dat"
+lib_train_file = "data/training/liberal.dat"
 
 # Filenames in which to save/load models
 model_dir = "models/"
@@ -32,6 +31,7 @@ lib_vocab_file = model_dir + "liberal_vocab.json"
 
 # Variables used for both training and scoring sentences
 max_sentence_length = 35
+min_sent_chars = 20
 vocab_size = 8000
 sentence_end = 0
 sentence_start = 1
@@ -63,19 +63,49 @@ def sentence_to_sequences(vocab, words):
 
     return (x_words, y_words)
 
+
+#TODO: document
+def arrayize_sentences(vocab, sentences, hot_encode_y = True):
+    # type: (Dict[str, int], List[str], bool) -> Tuple[np.array, np.array]
+    x_batch_arr = []
+    y_batch_arr = []
+    for sentence in sentences:
+        words = word_tokenize(sentence)
+        (x_words, y_words) = sentence_to_sequences(vocab, words)
+
+        # one hot encode the words
+        # this gives the arrays an extra dimension the size of the vocabulary
+        x_words = np_utils.to_categorical(x_words, vocab_size + first_index)
+        if hot_encode_y:
+            y_words = np_utils.to_categorical(y_words, vocab_size + first_index)
+
+        x_batch_arr.append(x_words)
+        y_batch_arr.append(y_words)
+
+    x_batch = np.array(x_batch_arr)
+    y_batch = np.array(y_batch_arr)
+    return x_batch, y_batch
+
 # TRAINING ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 # Create dictionary of words for training sentence model
 # filename- full path to file to read sentences from
 # there should be one sentence on each line in the file
-# returns a tuple containing the number of sentences in the file
+# returns a tuple containing the sentences in the file
 # and the dictionary mapping words to int encodings
 def create_vocab(filename):
     # type: (str) -> Tuple[int, Dict[str, int]]
 
     print("creating vocabulary")
     datafile = open(filename, 'r')
-    sentences = [line.lower() for line in datafile.readlines()]
+    all_sentences = [line.lower().strip() for line in datafile.readlines()]
+
+    sentences = []
+    for sentence in all_sentences:
+        sentence = sentence.lower().strip()
+        # only train on lines longer than a min number of chars
+        if len(sentence) > min_sent_chars:
+            sentences.append(sentence)
 
     # Count the frequency of each word in the dataset
     word_counts = Counter()
@@ -102,26 +132,29 @@ def gen_training_data(filename, vocab, batch_size):
 
     datafile = open(filename, 'r')
     while(True):
-        batch_sentences = [datafile.readline().lower().strip() for i in range(batch_size)]
-        x_batch_arr = []
-        y_batch_arr = []
-        for sentence in batch_sentences:
-            words = word_tokenize(sentence)
-            (x_words, y_words) = sentence_to_sequences(vocab, words)
 
-            # one hot encode the words
-            # this gives the arrays an extra dimension the size of the vocabulary
-            x_words = np_utils.to_categorical(x_words, vocab_size + first_index)
-            y_words = np_utils.to_categorical(y_words, vocab_size + first_index)
+        # get a batch of sentences
+        batch_sentences = []
+        this_batch_size = 0
+        while (this_batch_size < batch_size):
+            sentence = datafile.readline().lower().strip()
+            # only train on lines longer than a min number of chars
+            # but need to keep sentences that are empty for the batch
+            # to finish at the end of the file
+            if (len(sentence) > min_sent_chars) or sentence == "":
+                batch_sentences.append(sentence)
+                this_batch_size += 1
 
-            x_batch_arr.append(x_words)
-            y_batch_arr.append(y_words)
+        x_batch, y_batch = arrayize_sentences(vocab, batch_sentences, hot_encode_y=True)
 
-        x_batch = np.array(x_batch_arr)
-        y_batch = np.array(y_batch_arr)
-
-        x_batch = sequence.pad_sequences(x_batch, maxlen=max_sentence_length)
-        y_batch = sequence.pad_sequences(y_batch, maxlen=max_sentence_length)
+        x_batch = sequence.pad_sequences(x_batch,
+                               maxlen=max_sentence_length,
+                               padding='post',
+                               truncating='post')
+        y_batch = sequence.pad_sequences(y_batch,
+                               maxlen=max_sentence_length,
+                               padding='post',
+                               truncating='post')
         yield x_batch, y_batch
 
 # Define the LSTM layers and train the model
@@ -135,24 +168,27 @@ def train_model(filename, num_lines, vocab):
     hiddenLayerSize = 128
     batch_size = 64
     epochs = 3
+    learning_rate = 0.01
 
     # create the model
     model = Sequential()
     in_shape = (max_sentence_length, word_vec_size)
     lstm = LSTM(hiddenStateSize, return_sequences=True, input_shape=in_shape)
     model.add(lstm)
+    model.add(Dropout(0.2))
     # Using the TimeDistributed wrapper allows us to apply a layer to every
     # slice of the sentences (output a prediction after each word.)
     model.add(TimeDistributed(Dense(hiddenLayerSize, activation='relu')))
-    # TODO: add dropout layer?
+    model.add(Dropout(0.2))
     model.add(TimeDistributed(Dense(word_vec_size, activation='softmax')))
     # loss function categorical because each possible next word is a category
-    model.compile(loss='categorical_crossentropy', optimizer=RMSprop(lr=0.001))
+    model.compile(loss='categorical_crossentropy', optimizer=RMSprop(lr=learning_rate))
     print(model.summary())
 
     # Train the model
+    num_samples = int(num_lines / batch_size) * batch_size
     generator = gen_training_data(filename=filename, vocab=vocab, batch_size=batch_size)
-    model.fit_generator(generator, nb_epoch=epochs, samples_per_epoch=num_lines)
+    model.fit_generator(generator, nb_epoch=epochs, samples_per_epoch=num_samples)
     return model
 
 
@@ -187,55 +223,100 @@ def create_and_save_models():
 
 # SCORING ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-# Score the likelihood of a sentence under a given model
+# Score the likelihood of each sentence in a batch under a given model
 # Computes the likelihood of each word in the sentence given the previous
 # words and multiplies these probabilities to get an overall probability
-def score_sentence(model, X, y):
+# assumes X sentences are already one hot encoded but y sentences are not
+# this function does all computations in batch in order to run faster
+def score_sentences(model, X_hot, y):
     # type: (Sequential, np.array, np.array) -> float
-    # TODO: test this to see what size/format
-    # one hot encode the sentence to get a score for it
-    X_hot = np_utils.to_categorical(X, word_vec_size)
-    X_hot = np.expand_dims(X_hot, axis=0)
-    X_hot = sequence.pad_sequences(X_hot, maxlen=max_sentence_length)
+
+    # assume X sentences are already one hot encoded
+    # truncate and pad sequences
+    # num sentences * max sentence length * vocabulary size sized array
+    X_hot = sequence.pad_sequences(X_hot,
+                                   maxlen=max_sentence_length,
+                                   padding='post',
+                                   truncating='post')
+
+    # num sentences * max sentence length sized array
+    y = sequence.pad_sequences(y,
+                               maxlen=max_sentence_length,
+                               padding='post',
+                               truncating='post')
+
     # get a numpy array of probability predictions
+    # num sentences * max sentence length * vocabulary size
+    print("getting predictions from model")
     word_probs = model.predict_proba(X_hot)
-    word_probs = np.squeeze(word_probs, axis=(0,))
+    # use log probabilities so we don't get underflow
+    word_probs = np.log(word_probs)
     # the probability of a sentence is the product of probabilities
     # of each word given the words that came before it.
-    sentence_prob = 0
-    for (sentence_pos, word_index) in enumerate(y):
-        # use log probabilities and sum them so we don't get underflow
-        word_pos_prob = np.log(word_probs[sentence_pos, word_index])
-        sentence_prob += word_pos_prob
-        #TODO: remove debug statement
-        print("sentence pos is : ", sentence_pos,
-              " and word index is: ", word_index,
-              " and prob is: ", word_pos_prob)
+    print("computing overall probabilities for each sentence")
+    sentence_probs = np.zeros(y.shape[0])
+    for sentence_pos in range(max_sentence_length):
+        # get the probabilities of each possible word being the next word
+        # results in a num_sentences * vocab size array
+        word_pos_probs = word_probs[:, sentence_pos]
+        # get the index within the vocab of the next word in each sentence
+        # results in a num sentences sized array
+        vocab_indices = y[:, sentence_pos]
+        # get the probabilities of only the actual next word
+        next_word_probs = np.array([word_pos_probs[i,w] for i,w in enumerate(vocab_indices)])
+        # the product of probabilities is the sum of log probabilities
+        sentence_probs = np.add(sentence_probs, next_word_probs)
 
-    # TODO: do in batch?
-    return sentence_prob
+    print(sentence_probs)
+    return sentence_probs
 
-# predict a label for a sentence as conservative, neutral, or liberal
-# -1 represents conservative, 0 is neutral, and 1 is liberal
-def label_sentence(cons_model, lib_model, cons_vocab, lib_vocab, sentence):
-    # type: (Sequential, Sequential, Dict[str, int], Dict[str, int]) -> int
-    # put sentence in lowercase because training data/vocab is read in lowercase
-    sentence = sentence.lower()
+# takes a group of sentences, formats them one by one into the correct data format
+# and then scores them in a batch in order to run faster
+# then labels them one by one as liberal or conservative based on the score
+def label_sentences(cons_model, lib_model, cons_vocab, lib_vocab, sentences, thresh = 10, cons_scale_factor = 1):
+    # type: (Sequential, Sequential, Dict[str, int], Dict[str, int], List[str]) -> List[int]
 
-    # Get a prediction from the conservative model
-    x_cons, y_cons = sentence_to_sequences(cons_vocab, word_tokenize(sentence))
-    cons_score = score_sentence(cons_model, x_cons, y_cons)
+    sentences = [sentence.lower().strip() for sentence in sentences]
+    X_cons, y_cons = arrayize_sentences(cons_vocab, sentences, hot_encode_y=False)
+    cons_scores = score_sentences(cons_model, X_cons, y_cons)
+    cons_scores = cons_scores * cons_scale_factor
 
-    # Get a prediction from the liberal model
-    x_lib, y_lib = sentence_to_sequences(lib_vocab, word_tokenize(sentence))
-    lib_score = score_sentence(lib_model, x_lib, y_lib)
+    X_lib, y_lib = arrayize_sentences(lib_vocab, sentences, hot_encode_y=False)
+    lib_scores = score_sentences(lib_model, X_lib, y_lib)
 
-    print("conservative score is: ", cons_score,
-          " and liberal score is: ", lib_score)
+    sentence_labels = []
+    for cons_score, lib_score in zip(cons_scores, lib_scores):
+        label = 0
+        if (cons_score > lib_score):
+            if cons_score - lib_score > thresh:
+                label = -1
+        else:
+            if lib_score - cons_score > thresh:
+                label = 1
+        sentence_labels.append(label)
 
-    # TODO: determine threshold of difference between scores and return int label
-    # right now returning dummy number
-    return 0
+    print("number of sentence labels is: ", len(sentence_labels))
+    return sentence_labels
+
+# Computes the average ratio of liberal to conservative scores on neutral data.
+# Multiply the conservative scores times this factor to even them out
+def compute_scale_factor(cons_model, lib_model, cons_vocab, lib_vocab):
+    neutral_file = "data/valid/neutral.dat"
+
+    sentences = [sentence.lower().strip() for sentence in open(neutral_file).readlines()]
+
+    X_cons, y_cons = arrayize_sentences(cons_vocab, sentences, hot_encode_y=False)
+    cons_scores = score_sentences(cons_model, X_cons, y_cons)
+
+    X_lib, y_lib = arrayize_sentences(lib_vocab, sentences, hot_encode_y=False)
+    lib_scores = score_sentences(lib_model, X_lib, y_lib)
+
+    lib_to_cons_ratios = np.divide(lib_scores, cons_scores)
+    lib_to_cons_ratios = lib_to_cons_ratios[np.nonzero(np.isfinite(lib_to_cons_ratios))]
+    print("lib to cons ratios are: ", lib_to_cons_ratios)
+    scaling_factor = np.mean(lib_to_cons_ratios)
+    print ("computed scaling factor is: ", scaling_factor)
+    return scaling_factor
 
 # Load a model and the vocab encoding needed to test the probability
 # of a sentence within that model.

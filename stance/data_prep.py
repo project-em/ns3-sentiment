@@ -17,6 +17,7 @@ neutral_test_file = "data/testing/neutral.dat"
 # Filenames to write validation data
 cons_valid_file = "data/valid/conservative.dat"
 lib_valid_file = "data/valid/liberal.dat"
+neutral_valid_file = "data/valid/neutral.dat"
 
 # Conservative or liberal model types for loading data
 class DataPurpose(Enum):
@@ -49,8 +50,8 @@ def build_neutral_data():
     sent_detector = nltk.data.load('tokenizers/punkt/english.pickle')
 
     data = glob.glob("data/articles/*")
-    output_test_file = open("data/neutral_test.dat", "w+")
-    output_valid_file = open("data/neutral_valid.dat", "w+")
+    output_test_file = open(neutral_test_file, "w+")
+    output_valid_file = open(neutral_valid_file, "w+")
     count = 0
 
     for filename in data:
@@ -73,9 +74,6 @@ def build_neutral_data():
             count += len(sentences)
 
 
-
-# Given the name of an article folder (conservative, liberal, or neutral) read the 
-# articles from that folder and split them into sentences in a file of that name.
 # Writes the sentences to liberal and conservative data files
 def write_to_files(data_purpose):
     # type: (DataPurpose) -> ()
@@ -113,8 +111,6 @@ def write_to_files(data_purpose):
             else:
                 liberal_file.write(sentence.strip() + os.linesep)
 
-#TODO: write neutral data
-
 # Given the name of an article folder (conservative, liberal, or neutral) read the
 # articles from that folder and split them into sentences in a file of that name.
 # Writes the sentences to liberal and conservative data files
@@ -140,6 +136,9 @@ def create_combined_data(data_purpose):
                 training_file.write(sentence.encode('utf-8').strip() + "\t1" + os.linesep)
 
 def main():
+    write_to_files(DataPurpose.training)
+    write_to_files(DataPurpose.testing)
+    write_to_files(DataPurpose.validation)
     build_neutral_data()
 
 if __name__ == '__main__':
