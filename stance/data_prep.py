@@ -63,7 +63,7 @@ def build_neutral_data():
                 break
             line = line.replace("\n", "")
             line = line.replace("[REF]","")
-            sentences = sent_detector.tokenize()
+            sentences = sent_detector.tokenize(line)
             for i, sentence in enumerate(sentences):
                 if (i + count) < 5000:
                     output_test_file.write(sentence.strip() + os.linesep)
