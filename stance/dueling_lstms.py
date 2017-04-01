@@ -164,8 +164,8 @@ def train_model(filename, num_lines, vocab):
     print("training model")
 
     # model parameters
-    hiddenStateSize = 128
-    hiddenLayerSize = 128
+    hiddenStateSize = 256
+    hiddenLayerSize = 256
     batch_size = 64
     epochs = 3
     learning_rate = 0.01
@@ -173,7 +173,8 @@ def train_model(filename, num_lines, vocab):
     # create the model
     model = Sequential()
     in_shape = (max_sentence_length, word_vec_size)
-    lstm = LSTM(hiddenStateSize, return_sequences=True, input_shape=in_shape)
+    model.add(Dropout(0.2, input_shape=in_shape))
+    lstm = LSTM(hiddenStateSize, return_sequences=True)
     model.add(lstm)
     model.add(Dropout(0.2))
     # Using the TimeDistributed wrapper allows us to apply a layer to every
@@ -273,7 +274,8 @@ def score_sentences(model, X_hot, y):
 # takes a group of sentences, formats them one by one into the correct data format
 # and then scores them in a batch in order to run faster
 # then labels them one by one as liberal or conservative based on the score
-def label_sentences(cons_model, lib_model, cons_vocab, lib_vocab, sentences, thresh = 10, cons_scale_factor = 1):
+def label_sentences(cons_model, lib_model, cons_vocab, lib_vocab, sentences,
+                    lib_thresh = 30, cons_thresh = 30, cons_scale_factor = 1):
     # type: (Sequential, Sequential, Dict[str, int], Dict[str, int], List[str]) -> List[int]
 
     sentences = [sentence.lower().strip() for sentence in sentences]
@@ -288,10 +290,10 @@ def label_sentences(cons_model, lib_model, cons_vocab, lib_vocab, sentences, thr
     for cons_score, lib_score in zip(cons_scores, lib_scores):
         label = 0
         if (cons_score > lib_score):
-            if cons_score - lib_score > thresh:
+            if cons_score - lib_score > cons_thresh:
                 label = -1
         else:
-            if lib_score - cons_score > thresh:
+            if lib_score - cons_score > lib_thresh:
                 label = 1
         sentence_labels.append(label)
 

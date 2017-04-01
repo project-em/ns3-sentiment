@@ -63,7 +63,8 @@ def eval_predict_provenance(data_purpose):
     lib_model, lib_vocab = reload_model(SourceStance.liberal)
 
     scaling_factor = compute_scale_factor(cons_model,lib_model,cons_vocab,lib_vocab)
-    thresh = 30
+    lib_thresh = 30
+    cons_thresh = 40
 
     # Label each testing sentence
     print("labeling conservative sentences")
@@ -75,7 +76,8 @@ def eval_predict_provenance(data_purpose):
                                   lib_vocab,
                                   cons_sentences,
                                   cons_scale_factor=scaling_factor,
-                                  thresh=thresh)
+                                  lib_thresh=lib_thresh,
+                                  cons_thresh=cons_thresh)
 
     # Calculate the training and testing precision scores
     cons_testing_precision = precision_score(Y_cons_test, cons_labels, average='micro')
@@ -92,7 +94,8 @@ def eval_predict_provenance(data_purpose):
                                  lib_vocab,
                                  lib_sentences,
                                  cons_scale_factor=scaling_factor,
-                                 thresh=thresh)
+                                 lib_thresh=lib_thresh,
+                                 cons_thresh=cons_thresh)
 
     lib_testing_precision = precision_score(Y_lib_test, lib_labels, average='micro')
     unique, counts = np.unique(lib_labels, return_counts=True)

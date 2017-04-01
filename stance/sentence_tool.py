@@ -36,7 +36,8 @@ def label_database_sentences():
 
     scaling_factor = compute_scale_factor(cons_model, lib_model, cons_vocab, lib_vocab)
     # TODO: set threshold based on best threshold from evaluation script
-    thresh = 20
+    lib_thresh = 30
+    cons_thresh = 40
 
     print("fetching articles")
     articles = fetch_articles()
@@ -58,7 +59,8 @@ def label_database_sentences():
                                  lib_vocab=lib_vocab,
                                  sentences=sentences,
                                  cons_scale_factor=scaling_factor,
-                                 thresh=thresh)
+                                 lib_thresh=lib_thresh,
+                                 cons_thresh=cons_thresh)
 
         for sentence, label in zip(sentences, labels):
             # Store the sentence in the SQL table
