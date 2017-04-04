@@ -25,7 +25,6 @@ def connect():
 
     return connection
 
-
 # Labels sentences with bias and stores them into the SQL table
 def label_database_sentences():
     cons_model, cons_vocab = reload_model(SourceStance.conservative)

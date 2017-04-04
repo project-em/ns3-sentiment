@@ -84,6 +84,10 @@ def eval_predict_provenance(data_purpose):
     unique, counts = np.unique(cons_labels, return_counts=True)
     cons_counts = dict(zip(unique, counts))
 
+    del cons_sentences
+    del Y_cons_test
+    del cons_labels
+
     # Label each testing sentence
     print("labeling liberal sentences")
     lib_sentences = open(lib_file).readlines()
@@ -100,6 +104,29 @@ def eval_predict_provenance(data_purpose):
     lib_testing_precision = precision_score(Y_lib_test, lib_labels, average='micro')
     unique, counts = np.unique(lib_labels, return_counts=True)
     lib_counts = dict(zip(unique, counts))
+
+    del lib_sentences
+    del Y_lib_test
+    del lib_labels
+
+    if (data_purpose == DataPurpose.testing):
+        print("labeling neutral sentences")
+        neutral_sentences = open(neutral_file).readlines()
+        Y_neutral_test = np.repeat(0, len(neutral_sentences))
+        neutral_labels = label_sentences(cons_model,
+                                         lib_model,
+                                         cons_vocab,
+                                         lib_vocab,
+                                         neutral_sentences,
+                                         cons_scale_factor=scaling_factor,
+                                         lib_thresh=lib_thresh,
+                                         cons_thresh=cons_thresh)
+
+        neutral_testing_precision = precision_score(Y_neutral_test, neutral_labels, average='micro')
+        unique, counts = np.unique(neutral_labels, return_counts=True)
+        neutral_counts = dict(zip(unique, counts))
+        print("Neutral testing precision: ", str(neutral_testing_precision))
+        print("Neutral testing counts: ", str(neutral_counts))
 
     print("Conservative testing precision: ", str(cons_testing_precision))
     print("Conservative prediction counts: ", cons_counts)

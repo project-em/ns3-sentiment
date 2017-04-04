@@ -1,3 +1,4 @@
+import csv
 import glob
 import json
 import nltk
@@ -77,6 +78,10 @@ def build_neutral_data():
 # Writes the sentences to liberal and conservative data files
 def write_to_files(data_purpose):
     # type: (DataPurpose) -> ()
+
+    # Load NLTK sentence tokenizer
+    sent_detector = nltk.data.load('tokenizers/punkt/english.pickle')
+
     articles = fetch_articles(data_purpose)
 
     if data_purpose == DataPurpose.training:
@@ -98,18 +103,79 @@ def write_to_files(data_purpose):
     for article in articles:
         text = article[1].replace('\n', ' ')
         text = text.replace('\t', ' ')
+        text = text.replace('ADVERTISEMENT', '')
+        text = text.replace('Advertisement', '')
+        text = text.replace('RELATED: ', ' ')
         source = article[0]
 
-        # Load NLTK sentence tokenizer
-        sent_detector = nltk.data.load('tokenizers/punkt/english.pickle')
+        # tokenize sentences
         sentences = sent_detector.tokenize(text)
 
         for sentence in sentences:
+            # Skip sentences that start with "HIDE CAPTION" or have an HTML div
+            if (sentence.startswith("Hide Caption")):
+                continue
+            if "<div" in sentence:
+                continue
+
             # Right now sourceId 5 is the only conservative source
             if source == "thehill.com" or source == "foxnews.com":
                 conservative_file.write(sentence.strip() + os.linesep)
             else:
                 liberal_file.write(sentence.strip() + os.linesep)
+
+def build_scraped_data():
+
+    # Open all files for writing
+    os.makedirs("training", exist_ok=True)
+    cons_train = open(cons_train_file, 'w+')
+    lib_train = open(lib_train_file, 'w+')
+
+    os.makedirs("testing", exist_ok=True)
+    cons_test = open(cons_test_file, 'w+')
+    lib_test = open(lib_test_file, 'w+')
+
+    os.makedirs("valid", exist_ok=True)
+    cons_valid = open(cons_valid_file, 'w+')
+    lib_valid = open(lib_valid_file, 'w+')
+
+    # Load NLTK sentence tokenizer
+    sent_detector = nltk.data.load('tokenizers/punkt/english.pickle')
+
+    with open('data/article.csv', newline='') as csvfile:
+        reader = csv.reader(csvfile, delimiter=",")
+        lib_count = 0
+        cons_count = 0
+
+        for article in reader:
+            article_contents = article[2]
+            source = article[9]
+
+            text = article_contents.replace('\n', ' ')
+            text = text.replace('\t', ' ')
+
+            # tokenize sentences
+            sentences = sent_detector.tokenize(text)
+
+            for sentence in sentences:
+                # Sources 1 and 2 are liberal, all others are conservative
+                if source == '1' or source == '2':
+                    lib_count += 1
+                    if (lib_count <= 5000):
+                        lib_test.write(sentence.strip() + os.linesep)
+                    elif (lib_count <= 10000):
+                        lib_valid.write(sentence.strip() + os.linesep)
+                    else:
+                        lib_train.write(sentence.strip() + os.linesep)
+                else:
+                    cons_count += 1
+                    if (cons_count <= 5000):
+                        cons_test.write(sentence.strip() + os.linesep)
+                    elif (cons_count <= 10000):
+                        cons_valid.write(sentence.strip() + os.linesep)
+                    else:
+                        cons_train.write(sentence.strip() + os.linesep)
+
 
 # Given the name of an article folder (conservative, liberal, or neutral) read the
 # articles from that folder and split them into sentences in a file of that name.
