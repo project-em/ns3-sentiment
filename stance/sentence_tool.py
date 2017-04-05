@@ -41,6 +41,7 @@ def label_database_sentences():
     print("fetching articles")
     articles = fetch_articles()
 
+    print(len(articles))
     print("labeling all sentences")
     for row in articles:
         text = row[2]
@@ -49,24 +50,25 @@ def label_database_sentences():
         print("labeling one article")
         # Load NLTK sentence tokenizer and run it on the article
         sent_detector = nltk.data.load('tokenizers/punkt/english.pickle')
-        sentences = sent_detector.tokenize(text.decode('utf-8', 'ignore'))
+        sentences = sent_detector.tokenize(text)
+        print(sentences)
+        if (len(sentences) > 0):
+            # Label sentence here using our dueling models
+            labels = label_sentences(cons_model=cons_model,
+                                     lib_model=lib_model,
+                                     cons_vocab=cons_vocab,
+                                     lib_vocab=lib_vocab,
+                                     sentences=sentences,
+                                     cons_scale_factor=scaling_factor,
+                                     lib_thresh=lib_thresh,
+                                     cons_thresh=cons_thresh)
 
-        # Label sentence here using our dueling models
-        labels = label_sentences(cons_model=cons_model,
-                                 lib_model=lib_model,
-                                 cons_vocab=cons_vocab,
-                                 lib_vocab=lib_vocab,
-                                 sentences=sentences,
-                                 cons_scale_factor=scaling_factor,
-                                 lib_thresh=lib_thresh,
-                                 cons_thresh=cons_thresh)
-
-        for sentence, label in zip(sentences, labels):
-            # Store the sentence in the SQL table
-            cur.execute("INSERT INTO sentence ("
-                        + r'"text", "bias", "createdAt", "updatedAt", "articleId"'
-                        + ") VALUES (%s, %s, NOW(), NOW(), %s)",
-                        (sentence, str(label), str(articleId)))
+            for sentence, label in zip(sentences, labels):
+                # Store the sentence in the SQL table
+                cur.execute("INSERT INTO sentence ("
+                            + r'"text", "bias", "createdAt", "updatedAt", "articleId"'
+                            + ") VALUES (%s, %s, NOW(), NOW(), %s)",
+                            (sentence, str(label), str(articleId)))
 
     connection.commit()
 
@@ -75,8 +77,9 @@ def fetch_articles():
     connection = connect()
     cur = connection.cursor()
 
-    cur.execute("SELECT * FROM article;")
-    return cur.fetchall()
+    cur.execute("SELECT * FROM article WHERE " + r'"archivalDataFlag"' + "=0;")
+    articles = cur.fetchall()
+    return articles
 
 # Fetches the articles from the SQL table
 def fetch_sentences():
