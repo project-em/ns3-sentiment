@@ -17,9 +17,9 @@ def nouns_sim(word2vec, sentences, tagged_sentences, tagged_topic):
             sim_scores[i] = 0
             continue
         similarity = word2vec.n_similarity(topic_nouns, sentence_nouns)
-        print "topic nouns are: ", topic_nouns
-        print "sentence nouns are: ", sentence_nouns
-        print "similarity is: ", similarity
+        print("topic nouns are: ", topic_nouns)
+        print("sentence nouns are: ", sentence_nouns)
+        print("similarity is: ", similarity)
         sim_scores[i] = similarity
     return sim_scores
 
