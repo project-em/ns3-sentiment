@@ -41,6 +41,7 @@ def label_database_sentences():
     print("fetching articles")
     articles = fetch_articles()
 
+    print(len(articles))
     print("labeling all sentences")
     for row in articles:
         text = row[2]
@@ -49,7 +50,7 @@ def label_database_sentences():
         print("labeling one article")
         # Load NLTK sentence tokenizer and run it on the article
         sent_detector = nltk.data.load('tokenizers/punkt/english.pickle')
-        sentences = sent_detector.tokenize(text.decode('utf-8', 'ignore'))
+        sentences = sent_detector.tokenize(text)
 
         # Label sentence here using our dueling models
         labels = label_sentences(cons_model=cons_model,
@@ -77,9 +78,7 @@ def fetch_articles():
 
     cur.execute("SELECT * FROM article WHERE " + r'"archivalDataFlag"' + "=0;")
     articles = cur.fetchall()
-    print articles
-    print len(articles)
-    return cur.fetchall()
+    return articles
 
 # Fetches the articles from the SQL table
 def fetch_sentences():
