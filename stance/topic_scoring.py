@@ -1,4 +1,4 @@
-from gensim.models import Word2Vec
+from gensim.models import KeyedVectors
 from nltk import pos_tag
 from nltk import word_tokenize
 import numpy as np
@@ -24,13 +24,12 @@ def nouns_sim(word2vec, sentences, tagged_sentences, tagged_topic):
     return sim_scores
 
 def compute_sim(sentences, topic, word2vec):
-    print "sentences are: ", sentences
     tagged_sentences = [pos_tag(word_tokenize(sentence)) for sentence in sentences]
     tagged_topic = pos_tag(word_tokenize(topic))
     return nouns_sim(word2vec, sentences, tagged_sentences, tagged_topic)
 
 def load_word2vec():
     print("loading word2vec")
-    word2vec = Word2Vec.load_word2vec_format(word2vec_filepath, binary=True)
+    word2vec = KeyedVectors.load_word2vec_format(word2vec_filepath, binary=True)
     print("finished loading word2vec")
     return word2vec

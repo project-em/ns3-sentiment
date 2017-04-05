@@ -77,7 +77,7 @@ def label_database_sentences():
                 # Store the sentence in the SQL table
                 cur.execute("INSERT INTO sentence ("
                             + r'"text", "bias", "createdAt", "updatedAt", "articleId", "topicRelevance"'
-                            + ") VALUES (%s, %s, NOW(), NOW(), %s)",
+                            + ") VALUES (%s, %s, NOW(), NOW(), %s, %s)",
                             (sentence, str(bias_label), str(articleId), str(topic_score)))
 
     connection.commit()
