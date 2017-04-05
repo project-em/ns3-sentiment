@@ -2,7 +2,6 @@ from gensim.models import Word2Vec
 from nltk import pos_tag
 from nltk import word_tokenize
 import numpy as np
-from article_utils import read_data_file
 
 word2vec_filepath = "./data/GoogleNews-vectors-negative300.bin"
 

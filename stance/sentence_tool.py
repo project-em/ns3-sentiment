@@ -1,9 +1,9 @@
 import os
-import sys
 import psycopg2
 import nltk.data
 from dueling_lstms import compute_scale_factor, label_sentences, reload_model, SourceStance
 from dotenv import load_dotenv, find_dotenv
+from topic_scoring import compute_sim, load_word2vec
 
 def connect():
     load_dotenv(find_dotenv())
@@ -27,6 +27,8 @@ def connect():
 
 # Labels sentences with bias and stores them into the SQL table
 def label_database_sentences():
+    word2vec = load_word2vec()
+
     cons_model, cons_vocab = reload_model(SourceStance.conservative)
     lib_model, lib_vocab = reload_model(SourceStance.liberal)
 
@@ -38,6 +40,10 @@ def label_database_sentences():
     lib_thresh = 30
     cons_thresh = 30
 
+    print("Fetching topics")
+    topic_map = fetch_topics()
+    print("topic map is:", topic_map)
+
     print("fetching articles")
     articles = fetch_articles()
 
@@ -46,6 +52,8 @@ def label_database_sentences():
     for row in articles:
         text = row[2]
         articleId = row[0]
+        topicId = row[8]
+        topic = topic_map[topicId]
 
         print("labeling one article")
         # Load NLTK sentence tokenizer and run it on the article
@@ -54,7 +62,7 @@ def label_database_sentences():
         print(sentences)
         if (len(sentences) > 0):
             # Label sentence here using our dueling models
-            labels = label_sentences(cons_model=cons_model,
+            bias_labels = label_sentences(cons_model=cons_model,
                                      lib_model=lib_model,
                                      cons_vocab=cons_vocab,
                                      lib_vocab=lib_vocab,
@@ -63,12 +71,14 @@ def label_database_sentences():
                                      lib_thresh=lib_thresh,
                                      cons_thresh=cons_thresh)
 
-            for sentence, label in zip(sentences, labels):
+            topic_scores = compute_sim(sentences=sentences, topic=topic, word2vec=word2vec)
+
+            for sentence, bias_label, topic_score in zip(sentences, bias_labels, topic_scores):
                 # Store the sentence in the SQL table
                 cur.execute("INSERT INTO sentence ("
-                            + r'"text", "bias", "createdAt", "updatedAt", "articleId"'
+                            + r'"text", "bias", "createdAt", "updatedAt", "articleId", "topicRelevance"'
                             + ") VALUES (%s, %s, NOW(), NOW(), %s)",
-                            (sentence, str(label), str(articleId)))
+                            (sentence, str(bias_label), str(articleId), str(topic_score)))
 
     connection.commit()
 
@@ -89,6 +99,14 @@ def fetch_sentences():
     cur.execute("SELECT * FROM sentence;")
     return cur.fetchall()
 
+def fetch_topics():
+    connection = connect()
+    cur = connection.cursor()
+
+    cur.execute("SELECT * FROM topic;")
+    topics = cur.fetchall()
+    topic_map = {row[0]:row[1] for row in topics}
+    return topic_map
 
 # Run program with 'label' to label sentences and put them in the DB
 # Run program with 'write' to write sentences to conservative and liberal data files
