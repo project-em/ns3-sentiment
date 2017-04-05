@@ -51,7 +51,7 @@ def label_database_sentences():
         # Load NLTK sentence tokenizer and run it on the article
         sent_detector = nltk.data.load('tokenizers/punkt/english.pickle')
         sentences = sent_detector.tokenize(text)
-
+        print(sentences) 
         # Label sentence here using our dueling models
         labels = label_sentences(cons_model=cons_model,
                                  lib_model=lib_model,
