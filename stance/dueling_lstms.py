@@ -176,9 +176,9 @@ def train_model(filename, num_lines, vocab):
     model.add(Dropout(0.2, input_shape=in_shape))
     lstm = LSTM(hiddenStateSize, return_sequences=True)
     model.add(lstm)
-    model.add(Dropout(0.2))
     # Using the TimeDistributed wrapper allows us to apply a layer to every
     # slice of the sentences (output a prediction after each word.)
+    model.add(Dropout(0.2))
     model.add(TimeDistributed(Dense(hiddenLayerSize, activation='relu')))
     model.add(Dropout(0.2))
     model.add(TimeDistributed(Dense(word_vec_size, activation='softmax')))
@@ -303,7 +303,7 @@ def label_sentences(cons_model, lib_model, cons_vocab, lib_vocab, sentences,
 # Computes the average ratio of liberal to conservative scores on neutral data.
 # Multiply the conservative scores times this factor to even them out
 def compute_scale_factor(cons_model, lib_model, cons_vocab, lib_vocab):
-    neutral_file = "data/valid/neutral.dat"
+    neutral_file = "data/neutral_scaling.dat"
 
     sentences = [sentence.lower().strip() for sentence in open(neutral_file).readlines()]
 

@@ -50,17 +50,19 @@ def build_neutral_data():
     # Load NLTK sentence tokenizer
     sent_detector = nltk.data.load('tokenizers/punkt/english.pickle')
 
+    # Read wikipedia articles to build neutral sentences
     data = glob.glob("data/articles/*")
+    output_scaling_file = open("data/neutral_scaling.dat", "w+")
     output_test_file = open(neutral_test_file, "w+")
     output_valid_file = open(neutral_valid_file, "w+")
     count = 0
 
     for filename in data:
-        if count > 10000:
+        if count > 15000:
             break
         dataFile = open(filename, 'r')
         for line in dataFile.readlines():
-            if count > 10000:
+            if count > 15000:
                 break
             line = line.replace("\n", "")
             line = line.replace("[REF]","")
@@ -69,6 +71,8 @@ def build_neutral_data():
                 if (i + count) < 5000:
                     output_test_file.write(sentence.strip() + os.linesep)
                 elif (i + count) < 10000:
+                    output_scaling_file.write(sentence.strip() + os.linesep)
+                elif (i + count) < 15000:
                     output_valid_file.write(sentence.strip() + os.linesep)
                 else:
                     break
