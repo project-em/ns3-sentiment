@@ -173,7 +173,7 @@ def train_model(filename, num_lines, vocab):
     # create the model
     model = Sequential()
     in_shape = (max_sentence_length, word_vec_size)
-    model.add(Dropout(0.2, input_shape=in_shape))
+    model.add(Dropout(0.4, input_shape=in_shape))
     lstm = LSTM(hiddenStateSize, return_sequences=True)
     model.add(lstm)
     # Using the TimeDistributed wrapper allows us to apply a layer to every

@@ -95,7 +95,7 @@ def eval_predict_provenance(data_purpose):
     print("Liberal prediction counts: ", lib_counts)
 
 def main():
-    eval_predict_provenance(DataPurpose.validation)
+    eval_predict_provenance(DataPurpose.testing)
 
 if __name__ == '__main__':
     main()

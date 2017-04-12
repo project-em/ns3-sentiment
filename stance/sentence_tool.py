@@ -36,7 +36,8 @@ def label_database_sentences():
     cur = connection.cursor()
 
     scaling_factor = compute_scale_factor(cons_model, lib_model, cons_vocab, lib_vocab)
-    # TODO: set threshold based on best threshold from evaluation script
+
+    # the threshold is based on the best threshold from the evaluation script
     lib_thresh = 40
     cons_thresh = 30
 
@@ -45,7 +46,7 @@ def label_database_sentences():
     print("topic map is:", topic_map)
 
     print("fetching articles")
-    articles = fetch_articles()
+    articles = fetch_unlabeled_articles()
 
     print(len(articles))
     print("labeling all sentences")
@@ -81,6 +82,16 @@ def label_database_sentences():
                             (sentence, str(bias_label), str(articleId), str(topic_score)))
 
     connection.commit()
+
+# Fetches the articles that have not yet been split into sentences
+def fetch_unlabeled_articles():
+    connection = connect()
+    cur = connection.cursor()
+    cur.execute("SELECT * FROM article WHERE id IN "
+            + "(SELECT * FROM((SELECT id AS id from article)"
+            + "EXCEPT(SELECT DISTINCT articleId AS id from sentence)))")
+    articles = cur.fetchall()
+    return articles
 
 # Fetches the articles from the SQL table
 def fetch_articles():
