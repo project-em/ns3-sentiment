@@ -19,7 +19,7 @@ def connect():
         host = HOST,
         database = DATABASE,
         port = PORT,
-        user = 'pxwgadeeffddil',
+        user = 'smgqifpopvmfqg',
         password = PASSWORD
     )
 
