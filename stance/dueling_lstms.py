@@ -276,7 +276,7 @@ def score_sentences(model, X_hot, y):
 # then labels them one by one as liberal or conservative based on the score
 def label_sentences(cons_model, lib_model, cons_vocab, lib_vocab, sentences,
                     lib_thresh = 30, cons_thresh = 30, cons_scale_factor = 1):
-    # type: (Sequential, Sequential, Dict[str, int], Dict[str, int], List[str]) -> List[int]
+    # type: (Sequential, Sequential, Dict[str, int], Dict[str, int], List[str]) -> List[(int,float)]
 
     sentences = [sentence.lower().strip() for sentence in sentences]
     X_cons, y_cons = arrayize_sentences(cons_vocab, sentences, hot_encode_y=False)
@@ -289,13 +289,12 @@ def label_sentences(cons_model, lib_model, cons_vocab, lib_vocab, sentences,
     sentence_labels = []
     for cons_score, lib_score in zip(cons_scores, lib_scores):
         label = 0
-        if (cons_score > lib_score):
-            if cons_score - lib_score > cons_thresh:
-                label = -1
-        else:
-            if lib_score - cons_score > lib_thresh:
-                label = 1
-        sentence_labels.append(label)
+        diff = cons_score - lib_score
+        if diff > cons_thresh:
+            label = -1 # label conservative
+        elif diff < -lib_thresh:
+            label = 1 # label liberal
+        sentence_labels.append((label,diff))
 
     print("number of sentence labels is: ", len(sentence_labels))
     return sentence_labels

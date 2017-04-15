@@ -19,6 +19,11 @@ def eval_predict_provenance(data_purpose):
         lib_file = "data/valid/liberal.dat"
         neutral_file = "data/valid/neutral.dat"
 
+    #Files to write out scores to
+    cons_kde_file = "data/cons_kde.txt"
+    lib_kde_file = "data/lib_kde.txt"
+    neutral_kde_file = "data/neutral_kde.txt"
+
     # Load models
     cons_model, cons_vocab = reload_model(SourceStance.conservative)
     lib_model, lib_vocab = reload_model(SourceStance.liberal)
@@ -30,8 +35,7 @@ def eval_predict_provenance(data_purpose):
     # Label each testing sentence
     print("labeling conservative sentences")
     cons_sentences = open(cons_file).readlines()
-    Y_cons_test = np.repeat(-1, len(cons_sentences))
-    cons_labels = label_sentences(cons_model,
+    cons_results = label_sentences(cons_model,
                                   lib_model,
                                   cons_vocab,
                                   lib_vocab,
@@ -41,19 +45,22 @@ def eval_predict_provenance(data_purpose):
                                   cons_thresh=cons_thresh)
 
     # Calculate the training and testing precision scores
-    cons_testing_precision = precision_score(Y_cons_test, cons_labels, average='micro')
+    cons_labels = [result[0] for result in cons_results]
+    cons_scores = [result[1] for result in cons_results]
     unique, counts = np.unique(cons_labels, return_counts=True)
     cons_counts = dict(zip(unique, counts))
+    with open (cons_kde_file, 'w') as f:
+        for score in cons_scores:
+            f.write(score + "\n")
 
     del cons_sentences
-    del Y_cons_test
+    del cons_results
     del cons_labels
 
     # Label each testing sentence
     print("labeling liberal sentences")
     lib_sentences = open(lib_file).readlines()
-    Y_lib_test = np.repeat(1, len(lib_sentences))
-    lib_labels = label_sentences(cons_model,
+    lib_results = label_sentences(cons_model,
                                  lib_model,
                                  cons_vocab,
                                  lib_vocab,
@@ -62,18 +69,20 @@ def eval_predict_provenance(data_purpose):
                                  lib_thresh=lib_thresh,
                                  cons_thresh=cons_thresh)
 
-    lib_testing_precision = precision_score(Y_lib_test, lib_labels, average='micro')
+    lib_labels = [result[0] for result in lib_results]
+    lib_scores = [result[1] for result in lib_results]
     unique, counts = np.unique(lib_labels, return_counts=True)
     lib_counts = dict(zip(unique, counts))
-
+    with open(lib_kde_file, 'w') as f:
+        for score in lib_scores:
+            f.write(score + "\n")
+    del lib_results
     del lib_sentences
-    del Y_lib_test
     del lib_labels
 
     print("labeling neutral sentences")
     neutral_sentences = open(neutral_file).readlines()
-    Y_neutral_test = np.repeat(0, len(neutral_sentences))
-    neutral_labels = label_sentences(cons_model,
+    neutral_results = label_sentences(cons_model,
                                      lib_model,
                                      cons_vocab,
                                      lib_vocab,
@@ -81,17 +90,16 @@ def eval_predict_provenance(data_purpose):
                                      cons_scale_factor=scaling_factor,
                                      lib_thresh=lib_thresh,
                                      cons_thresh=cons_thresh)
-
-    neutral_testing_precision = precision_score(Y_neutral_test, neutral_labels, average='micro')
+    neutral_labels = [result[0] for result in neutral_results]
+    neutral_scores = [result[1] for result in neutral_results]
     unique, counts = np.unique(neutral_labels, return_counts=True)
     neutral_counts = dict(zip(unique, counts))
+    with open(neutral_kde_file, 'w') as f:
+        for score in neutral_scores:
+            f.write(score + "\n")
 
-
-    print("Neutral testing precision: ", str(neutral_testing_precision))
     print("Neutral testing counts: ", str(neutral_counts))
-    print("Conservative testing precision: ", str(cons_testing_precision))
     print("Conservative prediction counts: ", cons_counts)
-    print("Liberal testing precision: ", str(lib_testing_precision))
     print("Liberal prediction counts: ", lib_counts)
 
 def main():
