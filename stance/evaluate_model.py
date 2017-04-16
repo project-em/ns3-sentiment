@@ -51,7 +51,7 @@ def eval_predict_provenance(data_purpose):
     cons_counts = dict(zip(unique, counts))
     with open (cons_kde_file, 'w') as f:
         for score in cons_scores:
-            f.write(score + "\n")
+            f.write("%8.6f\n" % score)
 
     del cons_sentences
     del cons_results
@@ -75,7 +75,7 @@ def eval_predict_provenance(data_purpose):
     lib_counts = dict(zip(unique, counts))
     with open(lib_kde_file, 'w') as f:
         for score in lib_scores:
-            f.write(score + "\n")
+            f.write("%8.6f\n" % score)
     del lib_results
     del lib_sentences
     del lib_labels
@@ -96,7 +96,7 @@ def eval_predict_provenance(data_purpose):
     neutral_counts = dict(zip(unique, counts))
     with open(neutral_kde_file, 'w') as f:
         for score in neutral_scores:
-            f.write(score + "\n")
+            f.write("%8.6f\n" % score)
 
     print("Neutral testing counts: ", str(neutral_counts))
     print("Conservative prediction counts: ", cons_counts)
