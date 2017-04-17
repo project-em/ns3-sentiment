@@ -291,9 +291,9 @@ def label_sentences(cons_model, lib_model, cons_vocab, lib_vocab, sentences,
         label = 0
         diff = cons_score - lib_score
         if diff > cons_thresh:
-            label = -1 # label conservative
+            label = 1 # label conservative
         elif diff < -lib_thresh:
-            label = 1 # label liberal
+            label = -1 # label liberal
         sentence_labels.append((label,diff))
 
     print("number of sentence labels is: ", len(sentence_labels))

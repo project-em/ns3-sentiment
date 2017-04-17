@@ -1,21 +1,33 @@
 from sklearn.neighbors.kde import KernelDensity
 import numpy as np
 import matplotlib.pyplot as plt
+from matplotlib.ticker import AutoMinorLocator
 
-def plotKDE(kde, filename):
-    X_plot = np.linspace(-5, 10, 1000)[:, np.newaxis]
+def plotKDE(infile, title, outfile):
+    X = np.loadtxt(infile)
+    X = X[np.isfinite(X)]
+    X = X.reshape(-1, 1)
+    kde = KernelDensity(kernel='gaussian', bandwidth=4).fit(X)
+    X_plot = np.linspace(-200, 200, 1000)[:, np.newaxis]
+    fig, ax = plt.subplots()
+    ax.xaxis.set_minor_locator(AutoMinorLocator(5))
 
     log_dens = kde.score_samples(X_plot)
-    plt.fill(X_plot[:, 0], np.exp(log_dens), fc='#AAAAFF')
-    plt.text(-3.5, 0.31, "Gaussian Kernel Density")
-    plt.savefig(filename)
+    ax.fill(X_plot[:, 0], np.exp(log_dens), fc='g')
+    ax.set_xticks(np.arange(-200, 200, 50))
+    ax.axvspan(-200, -40, facecolor='b', alpha=0.5)
+    ax.axvspan(30, 200, facecolor='r', alpha=0.5)
+    ax.set_xlim([-200,200])
+    ax.set_ylim([0,.018])
+    ax.set_title(title)
+    ax.set_xlabel('Score')
+    ax.set_ylabel('Density')
+    plt.savefig(outfile)
 
 def main():
-
-    libX = np.loadtxt("data/lib_kde.txt")
-    lib_kde = KernelDensity(kernel='gaussian', bandwidth=0.2).fit(libX)
-    plotKDE(lib_kde, "data/lib_kde_graph.png")
-
+    plotKDE("data/lib_kde.txt", "Liberal Data", "data/lib_kde_graph.png")
+    plotKDE("data/cons_kde.txt", "Conservative Data", "data/cons_kde_graph.png")
+    plotKDE("data/neutral_kde.txt", "Neutral Data", "data/neutral_kde_graph.png")
 
 if __name__ == '__main__':
     main()

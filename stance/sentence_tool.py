@@ -75,11 +75,18 @@ def label_database_sentences():
             topic_scores = compute_sim(sentences=sentences, topic=topic, word2vec=word2vec)
 
             for sentence, (bias_label, bias_score), topic_score in zip(sentences, bias_labels, topic_scores):
+                # make all neutral sentences 0 and subtract threshold from cons/lib score
+                if (bias_label == -1):
+                    bias = bias_score + lib_thresh
+                elif (bias_label == 1):
+                    bias = bias_score - cons_thresh
+                else:
+                    bias = 0
                 # Store the sentence in the SQL table
                 cur.execute("INSERT INTO sentence ("
-                            + r'"text", "bias", "createdAt", "updatedAt", "articleId", "topicRelevance", "biasScore"'
+                            + r'"text", "bias", "createdAt", "updatedAt", "articleId", "topicRelevance"'
                             + ") VALUES (%s, %s, NOW(), NOW(), %s, %s, %s)",
-                            (sentence, str(bias_label), str(articleId), str(topic_score), str(bias_score)))
+                            (sentence, str(bias), str(articleId), str(topic_score)))
 
     connection.commit()
 
