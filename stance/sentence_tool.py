@@ -5,6 +5,25 @@ from dueling_lstms import compute_scale_factor, label_sentences, reload_model, S
 from dotenv import load_dotenv, find_dotenv
 from topic_scoring import compute_sim, load_word2vec
 
+word2vec = None
+cons_model = None
+cons_vocab = None
+lib_mobel = None
+lib_vocab = None
+scaling_factor = None
+lib_thresh = 40
+cons_thresh = 30
+
+def initialize_globals():
+    global word2vec, cons_model, cons_vocab, lib_mobel, lib_vocab, scaling_factor
+
+    word2vec = load_word2vec()
+
+    cons_model, cons_vocab = reload_model(SourceStance.conservative)
+    lib_model, lib_vocab = reload_model(SourceStance.liberal)
+    scaling_factor = compute_scale_factor(cons_model, lib_model, cons_vocab, lib_vocab)
+
+
 def connect():
     load_dotenv(find_dotenv())
     PASSWORD = os.getenv("PASSWORD")
@@ -25,21 +44,22 @@ def connect():
 
     return connection
 
-# Labels sentences with bias and stores them into the SQL table
-def label_database_sentences():
-    word2vec = load_word2vec()
-
-    cons_model, cons_vocab = reload_model(SourceStance.conservative)
-    lib_model, lib_vocab = reload_model(SourceStance.liberal)
-
+def label_article(article_id):
+    if not word2vec:
+        initialize_globals()
     connection = connect()
     cur = connection.cursor()
+    article = fetch_article(id)
+    topic_map = fetch_topics()
+    classify_article(article, topic_map, cur)
 
-    scaling_factor = compute_scale_factor(cons_model, lib_model, cons_vocab, lib_vocab)
-
-    # the threshold is based on the best threshold from the evaluation script
-    lib_thresh = 40
-    cons_thresh = 30
+# Labels sentences with bias and stores them into the SQL table
+def label_database_sentences():
+    if not word2vec:
+        initialize_globals()
+        
+    connection = connect()
+    cur = connection.cursor()
 
     print("Fetching topics")
     topic_map = fetch_topics()
@@ -51,44 +71,55 @@ def label_database_sentences():
     print(len(articles))
     print("labeling all sentences")
     for row in articles:
-        text = row[2]
-        articleId = row[0]
-        topicId = row[8]
-        topic = topic_map[topicId]
-
-        print("labeling one article")
-        # Load NLTK sentence tokenizer and run it on the article
-        sent_detector = nltk.data.load('tokenizers/punkt/english.pickle')
-        sentences = sent_detector.tokenize(text)
-        print(sentences)
-        if (len(sentences) > 0):
-            # Label sentence here using our dueling models
-            bias_labels = label_sentences(cons_model=cons_model,
-                                     lib_model=lib_model,
-                                     cons_vocab=cons_vocab,
-                                     lib_vocab=lib_vocab,
-                                     sentences=sentences,
-                                     cons_scale_factor=scaling_factor,
-                                     lib_thresh=lib_thresh,
-                                     cons_thresh=cons_thresh)
-
-            topic_scores = compute_sim(sentences=sentences, topic=topic, word2vec=word2vec)
-
-            for sentence, (bias_label, bias_score), topic_score in zip(sentences, bias_labels, topic_scores):
-                # make all neutral sentences 0 and subtract threshold from cons/lib score
-                if (bias_label == -1):
-                    bias = bias_score + lib_thresh
-                elif (bias_label == 1):
-                    bias = bias_score - cons_thresh
-                else:
-                    bias = 0
-                # Store the sentence in the SQL table
-                cur.execute("INSERT INTO sentence ("
-                            + r'"text", "bias", "createdAt", "updatedAt", "articleId", "topicRelevance"'
-                            + ") VALUES (%s, %s, NOW(), NOW(), %s, %s, %s)",
-                            (sentence, str(bias), str(articleId), str(topic_score)))
+        classify_article(row, topic_map, cur)
 
     connection.commit()
+
+def classify_article(row, topic_map, cur):
+    text = row[2]
+    articleId = row[0]
+    topicId = row[8]
+    topic = topic_map[topicId]
+
+    print("labeling one article")
+    # Load NLTK sentence tokenizer and run it on the article
+    sent_detector = nltk.data.load('tokenizers/punkt/english.pickle')
+    sentences = sent_detector.tokenize(text)
+    print(sentences)
+    if (len(sentences) > 0):
+        # Label sentence here using our dueling models
+        bias_labels = label_sentences(cons_model=cons_model,
+                                 lib_model=lib_model,
+                                 cons_vocab=cons_vocab,
+                                 lib_vocab=lib_vocab,
+                                 sentences=sentences,
+                                 cons_scale_factor=scaling_factor,
+                                 lib_thresh=lib_thresh,
+                                 cons_thresh=cons_thresh)
+
+        topic_scores = compute_sim(sentences=sentences, topic=topic, word2vec=word2vec)
+
+        for sentence, (bias_label, bias_score), topic_score in zip(sentences, bias_labels, topic_scores):
+            # make all neutral sentences 0 and subtract threshold from cons/lib score
+            if (bias_label == -1):
+                bias = bias_score + lib_thresh
+            elif (bias_label == 1):
+                bias = bias_score - cons_thresh
+            else:
+                bias = 0
+            # Store the sentence in the SQL table
+            cur.execute("INSERT INTO sentence ("
+                        + r'"text", "bias", "createdAt", "updatedAt", "articleId", "topicRelevance"'
+                        + ") VALUES (%s, %s, NOW(), NOW(), %s, %s, %s)",
+                        (sentence, str(bias), str(articleId), str(topic_score)))
+
+def fetch_article(id):
+    connection = connect()
+    cur = connection.cursor()
+    cur.execute("SELECT * FROM article WHERE id = %d " % id)
+    article = cur.fetchall()
+    connection.close()
+    return article
 
 # Fetches the articles that have not yet been split into sentences
 def fetch_unlabeled_articles():
